@@ -1,98 +1,260 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# lavc-back
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend del **LAVC (Latin American Veterinary Conference)** desarrollado con **NestJS** y **TypeScript**. Provee APIs para gestión de eventos, tickets y módulos relacionados.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+> **Stack**: NestJS · Node.js · TypeScript · (MongoDB vía Docker) · Docker Compose
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📦 Requisitos
 
-## Project setup
+- **Docker** y **Docker Compose v2**
+  - Verifica: `docker --version` y `docker compose version`
+- **Node.js 18+** (solo si vas a correr en modo local sin Docker)
+- **Git**
+
+> En Windows se recomienda **WSL2** para mejor desempeño con Docker.
+
+---
+
+## 🔧 Configuración rápida
+
+1. **Clona el repo**
+
+   ```bash
+   git clone git@github.com:Roycs1998/new-back-lavc.git
+   cd new-back-lavc
+   ```
+
+2. **Variables de entorno**
+   - Copia el ejemplo y edítalo:
+     ```bash
+     # Linux/Mac
+     cp .env.example .env
+     # Windows PowerShell
+     copy .env.example .env
+     ```
+   - Valores sugeridos (ajústalos a tu necesidad):
+
+     ```dotenv
+     # App
+     NODE_ENV=development
+     PORT=3000
+     CORS_ORIGIN=*
+
+     # Mongo
+     MONGODB_URI=mongodb://mongo:27017/lavc
+     MONGODB_DB=lavc
+
+     # Auth
+     JWT_SECRET=change-me-super-secret
+
+     # Swagger (si usas @nestjs/swagger)
+     SWAGGER_ENABLED=true
+     SWAGGER_PATH=/docs
+     ```
+
+---
+
+## ▶️ Ejecutar con Docker (recomendado)
+
+Este proyecto incluye **docker-compose** con al menos dos servicios:
+
+- `api`: la app NestJS
+- `mongo`: base de datos MongoDB (persistencia en volumen)
+
+> Si tus nombres difieren, actualiza los comandos y ejemplos.
+
+### 1) Levantar todo
 
 ```bash
-$ npm install
+docker compose up -d --build
 ```
 
-## Compile and run the project
+- **Primera vez**: construye imágenes y crea contenedores/volúmenes.
+- **Logs en vivo**:
+  ```bash
+  docker compose logs -f api
+  ```
+- **Ver estado**:
+  ```bash
+  docker compose ps
+  ```
+
+### 2) Probar que responde
+
+- API: `http://localhost:3000/` (o el `PORT` que definas)
+- Swagger (si está habilitado): `http://localhost:3000/docs`
+
+### 3) Apagar y limpiar
 
 ```bash
-# development
-$ npm run start
+# Apagar contenedores (mantiene datos)
+docker compose down
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Apagar y borrar datos (⚠️ elimina el volumen de Mongo)
+docker compose down -v
 ```
 
-## Run tests
+---
+
+## 🧪 Desarrollo sin Docker (opcional)
+
+1. Instala dependencias:
+   ```bash
+   npm install
+   ```
+2. Asegúrate de tener **MongoDB** corriendo localmente o ajusta `MONGODB_URI` para usar un cluster remoto.
+3. Ejecuta:
+
+   ```bash
+   # desarrollo
+   npm run start:dev
+
+   # producción
+   npm run start:prod
+   ```
+
+---
+
+## 📜 Scripts útiles
 
 ```bash
-# unit tests
-$ npm run test
+# desarrollo (watch)
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
+# producción (build + start)
+npm run build && npm run start:prod
 
-# test coverage
-$ npm run test:cov
+# tests
+npm run test          # unit
+npm run test:e2e      # e2e
+npm run test:cov      # cobertura
+
+# lint
+npm run lint
 ```
 
-## Deployment
+---
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## 🗂️ Estructura del proyecto (resumen)
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```
+src/
+  main.ts
+  app.module.ts
+  common/        # filtros, pipes, guards, interceptors
+  config/        # cargado de .env, schemas de configuración
+  modules/       # módulos de dominio (events, tickets, users, etc.)
+  infra/         # adaptadores (db/mongoose, mail, cache, etc.)
+test/
+docker/
+  mongo/         # init scripts, seeds opcionales
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+> Ajusta los nombres de carpetas a tu organización real.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## 🧩 Docker Compose explicado
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Un `docker-compose.yml` típico para este proyecto luce así (ejemplo orientativo):
 
-## Support
+```yaml
+services:
+  mongo:
+    image: mongo:7
+    container_name: lavc_mongo
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lavc_api
+    env_file: .env
+    ports:
+      - '${PORT:-3000}:3000'
+    depends_on:
+      - mongo
+    # Si usas hot-reload en docker:
+    # volumes:
+    #   - ./:/usr/src/app
+    #   - /usr/src/app/node_modules
 
-## Stay in touch
+volumes:
+  mongo_data:
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- **mongo**: expone `27017` y guarda datos en `mongo_data`.
+- **api**: expone `3000` (mapeado a tu `PORT`), lee variables desde `.env` y depende de `mongo`.
+- La app se conecta usando `MONGODB_URI=mongodb://mongo:27017/lavc` porque dentro de la red de Docker el host es el **nombre del servicio** (`mongo`).
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## 🧭 Endpoints y documentación
+
+- **Swagger** (si `SWAGGER_ENABLED=true`): visita `http://localhost:3000/docs`
+- Autogenera contratos y pruébalos allí.
+
+---
+
+## 🚀 Despliegue
+
+- **Imagen de producción**:
+  ```bash
+  docker build -t lavc-back:prod --target production .
+  ```
+- **Correr en prod** (ejemplo simple):
+  ```bash
+  docker run -d --name lavc_api     --env-file .env     -p 3000:3000 lavc-back:prod
+  ```
+
+Para entornos cloud, usa variables seguras (no subas `.env` al repo) y un servicio gestionado de Mongo si lo prefieres.
+
+---
+
+## 🆘 Troubleshooting
+
+- **Puerto ocupado (EADDRINUSE)**: cambia `PORT` en `.env` o libera el puerto:
+
+  ```bash
+  # Linux/Mac
+  lsof -i :3000
+  kill -9 <PID>
+
+  # Windows PowerShell
+  netstat -ano | findstr :3000
+  taskkill /PID <PID> /F
+  ```
+
+- **No conecta a Mongo (ECONNREFUSED)**:
+  - Verifica logs: `docker compose logs -f mongo`
+  - Asegura que `MONGODB_URI` apunta a `mongo` (no a `localhost`) cuando corres en Docker.
+
+- **Apple Silicon (M1/M2) e imágenes x86**:
+
+  ```bash
+  export DOCKER_DEFAULT_PLATFORM=linux/amd64
+  docker compose build --no-cache
+  ```
+
+- **Windows + Docker Desktop**: habilita WSL2 en Docker Desktop → Settings → General → “Use the WSL 2 based engine”.
+
+---
+
+## 🛡️ Buenas prácticas (sugerencias)
+
+- No subas `.env` al repo. Mantén un `.env.example`.
+- Usa `--force-with-lease` si necesitas sobrescribir en remoto con seguridad.
+- Añade **husky + lint-staged** para validar commits.
+- Considera **rate limiting**, **helmet** y **CORS** configurados en `main.ts`.
+
+---
+
+## 📄 Licencia
+
+MIT — ver `LICENSE`.
