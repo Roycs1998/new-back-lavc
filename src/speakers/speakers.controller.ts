@@ -98,12 +98,7 @@ export class SpeakersController {
     description: 'Active speakers retrieved successfully',
   })
   findAllPublic(@Query() filterDto: SpeakerFilterDto) {
-    const publicFilter = {
-      ...filterDto,
-      status: EntityStatus.ACTIVE,
-      isAvailable: true,
-    };
-    return this.speakersService.findAll(publicFilter);
+    return this.speakersService.findAll(filterDto);
   }
 
   @Patch(':id')

@@ -31,12 +31,15 @@ export class QRService {
 
   async generateQRCode(
     generateQRDto: GenerateQRDto,
-    userId: Types.ObjectId,
+    userId: string | Types.ObjectId,
   ): Promise<QRResponseDto> {
     const { ticketId } = generateQRDto;
 
+    const ticketObjectId =
+      typeof ticketId === 'string' ? new Types.ObjectId(ticketId) : ticketId;
+
     const ticket = await this.ticketModel
-      .findById(ticketId)
+      .findById(ticketObjectId)
       .populate('eventId')
       .populate('ticketTypeId')
       .populate('userId')
@@ -147,6 +150,10 @@ export class QRService {
       );
       response.ticketInfo = this.createTicketInfo(ticket, false);
 
+      const deviceInfoString = deviceInfo
+        ? JSON.stringify(deviceInfo)
+        : undefined;
+
       await this.logEntry(
         event._id,
         ticketJson._id,
@@ -154,7 +161,7 @@ export class QRService {
         EntryStatus.ALLOWED,
         validatorUserId,
         validationNotes,
-        deviceInfo,
+        deviceInfoString,
         ipAddress,
         location,
         qrData,
@@ -162,11 +169,15 @@ export class QRService {
 
       return response;
     } catch (error) {
+      const deviceInfoString = deviceInfo
+        ? JSON.stringify(deviceInfo)
+        : undefined;
+
       await this.logFailedEntry(
         validatorUserId,
         qrCode,
         ipAddress,
-        deviceInfo,
+        deviceInfoString,
         error.message,
       );
 
@@ -176,6 +187,77 @@ export class QRService {
       );
     }
   }
+
+  async getEventEntryStats(eventId: string) {
+    const eventObjectId = new Types.ObjectId(eventId);
+
+    const stats = await this.entryLogModel.aggregate([
+      { $match: { eventId: eventObjectId } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const totalAttempts = stats.reduce((sum, stat) => sum + stat.count, 0);
+    const allowed =
+      stats.find((s) => s._id === EntryStatus.ALLOWED)?.count || 0;
+
+    return {
+      eventId,
+      totalAttempts,
+      successfulEntries: allowed,
+      failedAttempts: totalAttempts - allowed,
+      successRate:
+        totalAttempts > 0
+          ? ((allowed / totalAttempts) * 100).toFixed(2) + '%'
+          : '0%',
+      breakdown: stats,
+      lastActivity: await this.getLastActivityTime(eventObjectId),
+    };
+  }
+
+  async getEventEntryLogs(eventId: Types.ObjectId, limit = 50) {
+    return this.entryLogModel
+      .find({ eventId })
+      .populate('ticketId', 'ticketNumber')
+      .populate('attendeeId', 'firstName lastName')
+      .populate('validatedBy', 'firstName lastName')
+      .sort({ validatedAt: -1 })
+      .limit(limit)
+      .lean();
+  }
+
+  async getValidationHistory(ticketId: string) {
+    const logs = await this.entryLogModel
+      .find({ ticketId: new Types.ObjectId(ticketId) })
+      .populate('validatedBy', 'email firstName lastName')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      ticketId,
+      totalAttempts: logs.length,
+      successfulEntries: logs.filter(
+        (log) => log.status === EntryStatus.ALLOWED,
+      ).length,
+      failedAttempts: logs.filter((log) => log.status !== EntryStatus.ALLOWED)
+        .length,
+      history: logs.map((log) => ({
+        status: log.status,
+        message: this.getStatusMessage(log.status),
+        timestamp: log.toJSON().createdAt,
+        validatedBy: log.validatedBy,
+        ipAddress: log.ipAddress,
+        deviceInfo: log.deviceInfo,
+        location: log.location,
+      })),
+    };
+  }
+
+  /* HELPERS */
 
   private createQRData(ticket: any): any {
     return {
@@ -348,42 +430,27 @@ export class QRService {
     };
   }
 
-  async getEventEntryStats(eventId: Types.ObjectId) {
-    const stats = await this.entryLogModel.aggregate([
-      { $match: { eventId: new Types.ObjectId(eventId) } },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    const totalAttempts = stats.reduce((sum, stat) => sum + stat.count, 0);
-    const allowed =
-      stats.find((s) => s._id === EntryStatus.ALLOWED)?.count || 0;
-
-    return {
-      eventId: eventId.toString(),
-      totalAttempts,
-      successfulEntries: allowed,
-      failedAttempts: totalAttempts - allowed,
-      successRate:
-        totalAttempts > 0
-          ? ((allowed / totalAttempts) * 100).toFixed(2) + '%'
-          : '0%',
-      breakdown: stats,
+  private getStatusMessage(status: EntryStatus): string {
+    const messages = {
+      [EntryStatus.ALLOWED]: 'Entrada permitida',
+      [EntryStatus.ALREADY_USED]: 'Ticket ya utilizado',
+      [EntryStatus.INVALID_TICKET]: 'Ticket inválido',
+      [EntryStatus.INVALID_SIGNATURE]: 'Código QR inválido o manipulado',
+      [EntryStatus.EVENT_NOT_STARTED]: 'El evento aún no ha iniciado',
+      [EntryStatus.EVENT_ENDED]: 'El evento ya terminó',
     };
+    return messages[status] || 'Estado desconocido';
   }
 
-  async getEventEntryLogs(eventId: Types.ObjectId, limit = 50) {
-    return this.entryLogModel
-      .find({ eventId })
-      .populate('ticketId', 'ticketNumber')
-      .populate('attendeeId', 'firstName lastName')
-      .populate('validatedBy', 'firstName lastName')
+  private async getLastActivityTime(
+    eventId: Types.ObjectId,
+  ): Promise<Date | null> {
+    const lastLog = await this.entryLogModel
+      .findOne({ eventId })
       .sort({ validatedAt: -1 })
-      .limit(limit)
+      .select('validatedAt')
       .lean();
+
+    return lastLog?.validatedAt || null;
   }
 }

@@ -43,7 +43,6 @@ export class EntryLog {
   @Prop({ type: String })
   ipAddress?: string;
 
-  // AQUÍ el tipo explícito:
   @Prop({ type: GeoLocationSchema })
   location?: GeoLocation;
 

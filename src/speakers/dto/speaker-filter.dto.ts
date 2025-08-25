@@ -3,7 +3,6 @@ import {
   IsEnum,
   IsString,
   IsMongoId,
-  IsBoolean,
   IsNumber,
   Min,
   Max,
