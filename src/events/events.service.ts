@@ -19,7 +19,7 @@ import { EventStatus } from 'src/common/enums/event-status.enum';
 import { TicketStatus } from 'src/common/enums/ticket-status.enum';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import { EventFilterDto } from './dto/event-filter.dto';
-import { PaginatedResult } from 'src/common/interface/pagination.interface';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { CreateTicketTypeDto } from './dto/create-ticket-type.dto';
 
 @Injectable()
@@ -103,7 +103,7 @@ export class EventsService {
   async findAll(
     filterDto: EventFilterDto,
     requestingUser?: any,
-  ): Promise<PaginatedResult<Event>> {
+  ): Promise<PaginationMetaDto<Event>> {
     const {
       page = 1,
       limit = 10,

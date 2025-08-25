@@ -7,61 +7,50 @@ import {
   MinLength,
   MaxLength,
   IsDateString,
+  IsNotEmpty,
+  IsPhoneNumber,
 } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { UserRole } from 'src/common/enums/user-role.enum';
+import { Transform, Type } from 'class-transformer';
+import { CreatePersonDto } from './create-person.dto';
 
-export class CreateUserWithPersonDto {
+export class CreateUserWithPersonDto extends OmitType(CreatePersonDto, [
+  'email',
+  'type',
+]) {
   @ApiProperty({
-    description: 'Person first name',
-    minLength: 2,
-    maxLength: 50,
+    description: 'Correo electrónico del usuario',
+    example: 'juan.perez@example.com',
   })
-  @IsString()
-  @MinLength(2)
-  @MaxLength(50)
-  firstName: string;
-
-  @ApiProperty({ description: 'Person last name', minLength: 2, maxLength: 50 })
-  @IsString()
-  @MinLength(2)
-  @MaxLength(50)
-  lastName: string;
-
-  @ApiProperty({
-    description: 'Email address (will be used for both person and user)',
-  })
-  @IsEmail()
+  @IsEmail({}, { message: 'El email debe tener un formato válido' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
-  @ApiPropertyOptional({ description: 'Phone number' })
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @ApiPropertyOptional({ description: 'Date of birth' })
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
-
-  @ApiProperty({ description: 'User password', minLength: 8 })
-  @IsString()
-  @MinLength(8)
+  @ApiProperty({
+    description: 'Contraseña del usuario',
+    minLength: 8,
+    example: 'Secr3tPass!',
+  })
+  @IsNotEmpty({ message: 'La contraseña es requerida' })
+  @IsString({ message: 'La contraseña debe ser texto' })
+  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
   password: string;
 
   @ApiPropertyOptional({
-    description: 'User role',
+    description: 'Rol del usuario',
     enum: UserRole,
     default: UserRole.USER,
   })
   @IsOptional()
-  @IsEnum(UserRole)
+  @IsEnum(UserRole, { message: 'El rol no es válido' })
   role?: UserRole;
 
   @ApiPropertyOptional({
-    description: 'Company ID (required for company admins)',
+    description: 'ID de la empresa (requerido para administradores de empresa)',
+    example: '64f14b1a2c4e5a1234567890',
   })
   @IsOptional()
-  @IsMongoId()
+  @IsMongoId({ message: 'El ID de la empresa debe ser un ObjectId válido' })
   companyId?: string;
 }

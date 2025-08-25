@@ -13,7 +13,7 @@ import { User, UserDocument } from './entities/user.entity';
 import { Model, SortOrder, Types } from 'mongoose';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
-import { PaginatedResult } from 'src/common/interface/pagination.interface';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { PersonsService } from 'src/persons/persons.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
@@ -103,7 +103,7 @@ export class UsersService {
 
   async findAll(
     filterDto: UserFilterDto,
-  ): Promise<PaginatedResult<UserDocument>> {
+  ): Promise<PaginationMetaDto<UserDocument>> {
     const {
       page = 1,
       limit = 10,

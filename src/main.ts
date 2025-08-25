@@ -44,12 +44,12 @@ async function bootstrap() {
     }),
   );
 
-  // Global filters and interceptors
+  /* // Global filters and interceptors
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new ResponseInterceptor(),
-  );
+  ); */
 
   // CORS configuration
   app.enableCors({
@@ -80,7 +80,7 @@ async function bootstrap() {
         },
         'JWT-auth',
       )
-      .addServer(`http://localhost:${port}/${apiPrefix}`, 'Desarrollo Local')
+      .addServer(`http://localhost:${port}/`, 'Desarrollo Local')
       .build();
 
     const document = SwaggerModule.createDocument(app, config);

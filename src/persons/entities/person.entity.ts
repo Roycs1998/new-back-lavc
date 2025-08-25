@@ -3,16 +3,16 @@ import { Document, Types } from 'mongoose';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { PersonType } from 'src/common/enums/person-type.enum';
 
-export type PersonDocument = Person & Document & { _id: Types.ObjectId };
+export type PersonDocument = Person & Document;
 
 @Schema({
   collection: 'persons',
   versionKey: false,
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
   discriminatorKey: 'type',
   id: false,
   toJSON: { virtuals: true },
   toObject: { virtuals: true },
+  timestamps: true,
 })
 export class Person {
   @Prop({ required: true, trim: true })
@@ -21,19 +21,20 @@ export class Person {
   @Prop({ required: true, trim: true })
   lastName: string;
 
-  @Prop({ trim: true })
+  @Prop({ trim: true, lowercase: true })
   email?: string;
 
   @Prop({ trim: true })
   phone?: string;
 
-  @Prop()
+  @Prop({ type: Date })
   dateOfBirth?: Date;
 
   @Prop({
     type: String,
     enum: PersonType,
     required: true,
+    index: true,
   })
   type: PersonType;
 
@@ -41,6 +42,7 @@ export class Person {
     type: String,
     enum: EntityStatus,
     default: EntityStatus.ACTIVE,
+    index: true,
   })
   entityStatus: EntityStatus;
 
@@ -60,8 +62,8 @@ PersonSchema.virtual('fullName').get(function () {
 PersonSchema.index(
   { email: 1 },
   {
+    unique: true,
+    sparse: true,
     partialFilterExpression: { entityStatus: { $ne: EntityStatus.DELETED } },
   },
 );
-
-PersonSchema.index({ type: 1 });

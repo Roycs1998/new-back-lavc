@@ -30,73 +30,87 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 import { StatusDto } from 'src/common/dto/status.dto';
+import { PersonDto } from './dto/person.dto';
+import { PersonPaginatedDto } from './dto/person-pagination.dto';
 
-@ApiTags('Persons')
+@ApiTags('Personas')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('persons')
 export class PersonsController {
   constructor(private readonly personsService: PersonsService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Create a new person' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 201, description: 'Person created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  create(@Body() createPersonDto: CreatePersonDto) {
+  @ApiResponse({
+    status: 201,
+    description: 'Persona creada correctamente',
+    type: PersonDto,
+  })
+  @ApiResponse({ status: 400, description: 'Error de validación en los datos' })
+  create(@Body() createPersonDto: CreatePersonDto): Promise<PersonDto> {
     return this.personsService.create(createPersonDto);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Get all persons with advanced filtering' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Persons retrieved successfully' })
-  findAll(@Query() filterDto: PersonFilterDto) {
+  @ApiOperation({ summary: 'Obtener todas las personas con filtros' })
+  @ApiResponse({
+    status: 200,
+    description: 'Listado de personas obtenido correctamente',
+    type: PersonPaginatedDto,
+  })
+  findAll(@Query() filterDto: PersonFilterDto): Promise<PersonPaginatedDto> {
     return this.personsService.findAll(filterDto);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Get person by ID' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Person found' })
-  @ApiResponse({ status: 404, description: 'Person not found' })
-  findOne(@Param('id', ParseObjectIdPipe) id: string) {
+  @ApiOperation({ summary: 'Obtener persona por su ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Persona encontrada',
+    type: PersonDto,
+  })
+  @ApiResponse({ status: 404, description: 'Persona no encontrada' })
+  findOne(@Param('id', ParseObjectIdPipe) id: string): Promise<PersonDto> {
     return this.personsService.findOne(id);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Update person by ID' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Person updated successfully' })
-  @ApiResponse({ status: 404, description: 'Person not found' })
+  @ApiOperation({ summary: 'Actualizar persona por ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Persona actualizada correctamente',
+    type: PersonDto,
+  })
+  @ApiResponse({ status: 404, description: 'Persona no encontrada' })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() updatePersonDto: UpdatePersonDto,
-  ) {
+  ): Promise<PersonDto> {
     return this.personsService.update(id, updatePersonDto);
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Change person status' })
-  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Cambiar estado de la persona (ej: activo, eliminado)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Person status updated successfully',
+    description: 'Estado de la persona actualizado correctamente',
+    type: PersonDto,
   })
+  @ApiResponse({ status: 404, description: 'Persona no encontrada' })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: StatusDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<PersonDto> {
     return this.personsService.changeStatus(
       id,
       dto.entityStatus,
@@ -106,10 +120,9 @@ export class PersonsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Soft delete person by ID' })
-  @ApiResponse({ status: 204, description: 'User soft-deleted successfully' })
+  @ApiOperation({ summary: 'Eliminar persona lógicamente por ID' })
+  @ApiResponse({ status: 204, description: 'Persona eliminada correctamente' })
   async softDelete(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,

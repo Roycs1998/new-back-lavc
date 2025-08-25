@@ -1,30 +1,39 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class PaginationMetaDto {
-  @ApiProperty({ example: 1, description: 'Página actual' })
-  currentPage: number;
+export class PaginationMetaDto<T> {
+  @ApiProperty({
+    description: 'Lista de elementos de la página actual',
+    example: [],
+  })
+  data: T[];
 
-  @ApiProperty({ example: 10, description: 'Elementos por página' })
-  perPage: number;
-
-  @ApiProperty({ example: 100, description: 'Total de elementos' })
+  @ApiProperty({
+    description: 'Total de elementos encontrados',
+    example: 150,
+  })
   totalItems: number;
 
-  @ApiProperty({ example: 10, description: 'Total de páginas' })
+  @ApiProperty({
+    description: 'Número total de páginas calculadas',
+    example: 15,
+  })
   totalPages: number;
 
-  @ApiProperty({ example: true, description: '¿Hay página anterior?' })
-  hasPreviousPage: boolean;
+  @ApiProperty({
+    description: 'Número de la página actual',
+    example: 3,
+  })
+  currentPage: number;
 
-  @ApiProperty({ example: true, description: '¿Hay página siguiente?' })
+  @ApiProperty({
+    description: '¿Existe una página siguiente?',
+    example: true,
+  })
   hasNextPage: boolean;
 
-  constructor(page: number, limit: number, totalItems: number) {
-    this.currentPage = page;
-    this.perPage = limit;
-    this.totalItems = totalItems;
-    this.totalPages = Math.ceil(totalItems / limit);
-    this.hasPreviousPage = page > 1;
-    this.hasNextPage = page < this.totalPages;
-  }
+  @ApiProperty({
+    description: '¿Existe una página anterior?',
+    example: false,
+  })
+  hasPreviousPage: boolean;
 }

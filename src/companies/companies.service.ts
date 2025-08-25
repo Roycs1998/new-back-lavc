@@ -10,7 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, SortOrder, Types } from 'mongoose';
 
 import { CompanyType } from 'src/common/enums/company-type.enum';
-import { PaginatedResult } from 'src/common/interface/pagination.interface';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -44,7 +44,7 @@ export class CompaniesService {
 
   async findAll(
     filterDto: CompanyFilterDto,
-  ): Promise<PaginatedResult<CompanyDocument>> {
+  ): Promise<PaginationMetaDto<CompanyDocument>> {
     const {
       page = 1,
       limit = 10,

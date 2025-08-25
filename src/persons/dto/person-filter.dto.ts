@@ -5,10 +5,11 @@ import { PersonType } from '../../common/enums/person-type.enum';
 
 export class PersonFilterDto extends BaseFilterDto {
   @ApiPropertyOptional({
-    description: 'Filter by person type',
+    description: 'Filtrar por tipo de persona',
     enum: PersonType,
+    example: PersonType.USER_PERSON,
   })
   @IsOptional()
-  @IsEnum(PersonType)
+  @IsEnum(PersonType, { message: 'El tipo de persona no es válido' })
   type?: PersonType;
 }

@@ -9,19 +9,20 @@ import {
 import { CreateSpeakerDto } from './dto/create-speaker.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Speaker, SpeakerDocument } from './entities/speaker.entity';
-import { Model, PipelineStage, Types } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 import { PersonsService } from 'src/persons/persons.service';
 import { CompaniesService } from 'src/companies/companies.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateSpeakerWithPersonDto } from 'src/persons/dto/create-speaker-with-person.dto';
 import { SpeakerFilterDto } from './dto/speaker-filter.dto';
-import { PaginatedResult } from 'src/common/interface/pagination.interface';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
 import { PersonDocument } from 'src/persons/entities/person.entity';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 import { toObjectId } from 'src/utils/toObjectId';
 import { sanitizeDefined } from 'src/utils/sanitizeDefined';
+import { PersonDto } from 'src/persons/dto/person.dto';
 
 export interface CompanySpeakerStats {
   totalSpeakers: number;
@@ -95,7 +96,7 @@ export class SpeakersService {
   async createSpeakerWithPerson(
     dto: CreateSpeakerWithPersonDto,
     createdBy?: string,
-  ): Promise<{ speaker: SpeakerDocument; person: PersonDocument }> {
+  ): Promise<{ speaker: SpeakerDocument; person: PersonDto }> {
     const company = await this.companiesService.findOne(dto.companyId);
     if (company.entityStatus !== EntityStatus.ACTIVE)
       throw new BadRequestException('Company is not active');
@@ -112,7 +113,6 @@ export class SpeakersService {
         certifications: dto.certifications,
         hourlyRate: dto.hourlyRate,
         currency: dto.currency ?? 'PEN',
-        isAvailable: dto.isAvailable ?? true,
         socialMedia: dto.socialMedia,
         languages: dto.languages,
         topics: dto.topics,
@@ -141,7 +141,7 @@ export class SpeakersService {
   async findAll(
     filter: SpeakerFilterDto,
     requestingUser?: CurrentUserData,
-  ): Promise<PaginatedResult<any>> {
+  ): Promise<PaginationMetaDto<any>> {
     const {
       page = 1,
       limit = 10,

@@ -15,6 +15,7 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
 
 export interface AuthResponse {
   user: {
@@ -124,7 +125,7 @@ export class AuthService {
     }
 
     try {
-      const userWithPersonDto = {
+      const userWithPersonDto: CreateUserWithPersonDto = {
         firstName,
         lastName,
         email,

@@ -10,7 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Person, PersonDocument } from './entities/person.entity';
 import { Model, Types } from 'mongoose';
 import { PersonType } from 'src/common/enums/person-type.enum';
-import { PaginatedResult } from 'src/common/interface/pagination.interface';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateUserWithPersonDto } from './dto/create-user-with-person.dto';
 import { CreateSpeakerWithPersonDto } from './dto/create-speaker-with-person.dto';
@@ -19,6 +19,9 @@ import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 import { asDate } from 'src/utils/asDate';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { normalizeEmail } from 'src/utils/normalizeEmail';
+import { PersonDto } from './dto/person.dto';
+import { PersonPaginatedDto } from './dto/person-pagination.dto';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class PersonsService {
@@ -26,60 +29,54 @@ export class PersonsService {
     @InjectModel(Person.name) private personModel: Model<PersonDocument>,
   ) {}
 
-  async create(createPersonDto: CreatePersonDto): Promise<PersonDocument> {
-    try {
-      if (createPersonDto.email) {
-        const existingPerson = await this.personModel.findOne({
-          email: createPersonDto.email,
-          entityStatus: { $ne: EntityStatus.DELETED },
-        });
+  async create(dto: CreatePersonDto): Promise<PersonDto> {
+    if (dto.email) {
+      dto.email = normalizeEmail(dto.email);
 
-        if (existingPerson) {
-          throw new BadRequestException('Email already exists');
-        }
-      }
-
-      const person = new this.personModel({
-        ...createPersonDto,
-        entityStatus: EntityStatus.ACTIVE,
+      const exists = await this.personModel.exists({
+        email: dto.email,
+        entityStatus: { $ne: EntityStatus.DELETED },
       });
 
-      return await person.save();
-    } catch (error) {
-      throw error;
+      if (exists) {
+        throw new ConflictException('El email ya está registrado');
+      }
     }
+
+    const person = new this.personModel({
+      ...dto,
+      entityStatus: EntityStatus.ACTIVE,
+    });
+
+    return this.toDto(await person.save());
   }
 
-  async createForUser(
-    userData: CreateUserWithPersonDto,
-  ): Promise<PersonDocument> {
-    const personData = {
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      email: userData.email,
-      phone: userData.phone,
-      dateOfBirth: userData.dateOfBirth,
+  async createForUser(dto: CreateUserWithPersonDto): Promise<PersonDto> {
+    const { firstName, lastName, email, phone, dateOfBirth } = dto;
+
+    return this.create({
+      firstName,
+      lastName,
+      email,
+      phone,
+      dateOfBirth,
       type: PersonType.USER_PERSON,
-    };
-
-    return this.create(personData);
+    });
   }
 
-  async createForSpeaker(
-    speakerData: CreateSpeakerWithPersonDto,
-  ): Promise<PersonDocument> {
-    const personData = {
-      firstName: speakerData.firstName,
-      lastName: speakerData.lastName,
-      email: speakerData.email,
-      phone: speakerData.phone,
+  async createForSpeaker(dto: CreateSpeakerWithPersonDto): Promise<PersonDto> {
+    const { firstName, lastName, email, phone } = dto;
+
+    return this.create({
+      firstName,
+      lastName,
+      email,
+      phone,
       type: PersonType.SPEAKER_PERSON,
-    };
-
-    return this.create(personData);
+    });
   }
 
-  async findAll(filterDto: PersonFilterDto): Promise<PaginatedResult<Person>> {
+  async findAll(filterDto: PersonFilterDto): Promise<PersonPaginatedDto> {
     const {
       page = 1,
       limit = 20,
@@ -105,6 +102,7 @@ export class PersonsService {
 
     const from = asDate(createdFrom);
     const to = asDate(createdTo);
+
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = from;
@@ -148,7 +146,7 @@ export class PersonsService {
     const totalPages = totalItems ? Math.ceil(totalItems / safeLimit) : 1;
 
     return {
-      data,
+      data: data.map((doc) => this.toDto(doc)),
       totalItems,
       totalPages,
       currentPage: safePage,
@@ -157,38 +155,45 @@ export class PersonsService {
     };
   }
 
-  async findOne(id: string, includeDeleted = false): Promise<Person> {
+  async findOne(id: string, includeDeleted = false): Promise<PersonDto> {
     const filter: any = { _id: id };
+
     if (!includeDeleted) {
       filter.entityStatus = { $ne: EntityStatus.DELETED };
     }
 
     const person = await this.personModel.findOne(filter).exec();
+
     if (!person) {
-      throw new NotFoundException(`Person with ID ${id} not found`);
+      throw new NotFoundException(`Persona con ID ${id} no encontrada`);
     }
-    return person;
+    return this.toDto(person);
   }
 
-  async findByEmail(
-    email: string,
-    includeDeleted = false,
-  ): Promise<Person | null> {
+  async findByEmail(email: string, includeDeleted = false): Promise<PersonDto> {
     const filter: any = { email };
     if (!includeDeleted) {
       filter.entityStatus = { $ne: EntityStatus.DELETED };
     }
 
-    return this.personModel.findOne(filter).exec();
+    const person = await this.personModel.findOne(filter).exec();
+
+    if (!person) {
+      throw new NotFoundException(`Persona con email ${email} no encontrada`);
+    }
+
+    return this.toDto(person);
   }
 
-  async update(id: string, dto: UpdatePersonDto): Promise<Person> {
+  async update(id: string, dto: UpdatePersonDto): Promise<PersonDto> {
     if (dto.email) dto.email = normalizeEmail(dto.email);
 
-    const existing = await this.personModel
-      .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
-      .lean();
-    if (!existing) throw new NotFoundException('Person not found');
+    const existing = await this.personModel.findOne({
+      _id: id,
+      entityStatus: { $ne: EntityStatus.DELETED },
+    });
+
+    if (!existing) throw new NotFoundException('Persona no encontrada');
 
     if (dto.email && dto.email !== existing.email) {
       const dup = await this.personModel.exists({
@@ -196,30 +201,23 @@ export class PersonsService {
         email: dto.email,
         entityStatus: { $ne: EntityStatus.DELETED },
       });
-      if (dup) throw new ConflictException('Email already exists');
+      if (dup) throw new ConflictException('El email ya está registrado');
     }
 
     const $set = sanitizeFlat(dto);
 
-    if (Object.keys($set).length === 0) {
-      const doc = await this.personModel.findById(id).exec();
-      if (!doc) throw new NotFoundException('Person not found');
-      return doc;
-    }
+    const updated = await this.personModel.findOneAndUpdate(
+      { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
+      { $set, $currentDate: { updatedAt: true } },
+      { new: true, runValidators: true, context: 'query' },
+    );
 
-    const updated = await this.personModel
-      .findOneAndUpdate(
-        { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
-        { $set, $currentDate: { updatedAt: true } },
-        { new: true, runValidators: true, context: 'query' },
-      )
-      .exec();
+    if (!updated) throw new NotFoundException('Persona no encontrada');
 
-    if (!updated) throw new NotFoundException('Person not found');
-    return updated;
+    return this.toDto(updated);
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<Person> {
+  async softDelete(id: string, deletedBy?: string): Promise<PersonDto> {
     return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
   }
 
@@ -227,7 +225,7 @@ export class PersonsService {
     id: string,
     entityStatus: EntityStatus,
     changedBy?: string,
-  ): Promise<Person> {
+  ): Promise<PersonDto> {
     const update: any = {
       $set: { entityStatus },
       $currentDate: { updatedAt: true },
@@ -248,7 +246,13 @@ export class PersonsService {
       })
       .exec();
 
-    if (!doc) throw new NotFoundException('Person not found');
-    return doc;
+    if (!doc) throw new NotFoundException('Persona no encontrada');
+    return this.toDto(doc);
+  }
+
+  private toDto(document: PersonDocument): PersonDto {
+    return plainToInstance(PersonDto, document.toJSON(), {
+      excludeExtraneousValues: true,
+    });
   }
 }
