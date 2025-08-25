@@ -36,6 +36,19 @@ export class Person {
     required: true,
   })
   type: PersonType;
+
+  @Prop({
+    type: String,
+    enum: EntityStatus,
+    default: EntityStatus.ACTIVE,
+  })
+  entityStatus: EntityStatus;
+
+  @Prop({ type: Date })
+  deletedAt: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy: Types.ObjectId;
 }
 
 export const PersonSchema = SchemaFactory.createForClass(Person);
@@ -47,7 +60,7 @@ PersonSchema.virtual('fullName').get(function () {
 PersonSchema.index(
   { email: 1 },
   {
-    partialFilterExpression: { status: { $ne: EntityStatus.DELETED } },
+    partialFilterExpression: { entityStatus: { $ne: EntityStatus.DELETED } },
   },
 );
 

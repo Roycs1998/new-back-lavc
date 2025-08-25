@@ -42,7 +42,7 @@ export class EventsService {
       const company = await this.companiesService.findOne(
         createEventDto.companyId,
       );
-      if (company.status !== EntityStatus.ACTIVE) {
+      if (company.entityStatus !== EntityStatus.ACTIVE) {
         throw new BadRequestException('Company is not active');
       }
 
@@ -63,7 +63,7 @@ export class EventsService {
       } else {
         const existingEvent = await this.eventModel.findOne({
           slug,
-          status: { $ne: EntityStatus.DELETED },
+          eventStatus: { $ne: EventStatus.DELETED },
         });
         if (existingEvent) {
           throw new BadRequestException('Slug already exists');
@@ -89,7 +89,6 @@ export class EventsService {
           createEventDto.speakers?.map((id) => new Types.ObjectId(id)) || [],
         createdBy: new Types.ObjectId(createdBy),
         eventStatus: EventStatus.DRAFT,
-        status: EntityStatus.ACTIVE,
         startDate,
         endDate,
       };
@@ -132,8 +131,17 @@ export class EventsService {
       {
         $lookup: {
           from: 'companies',
-          localField: 'companyId',
-          foreignField: '_id',
+          let: { uid: '$companyId' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$uid'] } } },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                logo: 1,
+              },
+            },
+          ],
           as: 'company',
         },
       },
@@ -157,8 +165,18 @@ export class EventsService {
       {
         $lookup: {
           from: 'users',
-          localField: 'createdBy',
-          foreignField: '_id',
+          let: { uid: '$createdBy' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$uid'] } } },
+            {
+              $project: {
+                _id: 1,
+                firstName: 1,
+                lastName: 1,
+                email: 1,
+              },
+            },
+          ],
           as: 'creator',
         },
       },
@@ -166,6 +184,16 @@ export class EventsService {
         $addFields: {
           creator: { $arrayElemAt: ['$creator', 0] },
         },
+      },
+      {
+        $unset: [
+          'companyId',
+          'createdBy',
+          'updatedAt',
+          'approvedAt',
+          'approvedBy',
+          'speakers',
+        ],
       },
     ];
 
@@ -308,7 +336,7 @@ export class EventsService {
   ): Promise<EventDocument> {
     const filter: any = { _id: id };
     if (!includeDeleted) {
-      filter.status = { $ne: EntityStatus.DELETED };
+      filter.eventStatus = { $ne: EventStatus.DELETED };
     }
 
     const event = await this.eventModel
@@ -355,11 +383,10 @@ export class EventsService {
     return event;
   }
 
-  async findBySlug(slug: string, requestingUser?: any): Promise<EventDocument> {
+  async findBySlug(slug: string): Promise<EventDocument> {
     const event = await this.eventModel
       .findOne({
         slug,
-        status: { $ne: EntityStatus.DELETED },
         eventStatus: { $in: [EventStatus.PUBLISHED, EventStatus.COMPLETED] },
       })
       .populate('companyId', 'name contactEmail')
@@ -404,7 +431,7 @@ export class EventsService {
         const existingSlugEvent = await this.eventModel.findOne({
           slug: updateEventDto.slug,
           _id: { $ne: id },
-          status: { $ne: EntityStatus.DELETED },
+          eventStatus: { $ne: EventStatus.DELETED },
         });
         if (existingSlugEvent) {
           throw new BadRequestException('Slug already exists');
@@ -507,6 +534,26 @@ export class EventsService {
     return event;
   }
 
+  async submitForReview(id: string) {
+    const event = await this.eventModel.findOne({ _id: id });
+
+    if (!event) throw new NotFoundException('Event not found');
+
+    if (event.eventStatus !== EventStatus.DRAFT) {
+      throw new BadRequestException('Only draft events can be submitted');
+    }
+
+    if (!event.location?.type)
+      throw new BadRequestException('Location type is required');
+
+    if (event.location.capacity && event.location.capacity < 1)
+      throw new BadRequestException('Capacity must be >= 1');
+
+    event.eventStatus = EventStatus.PENDING_APPROVAL;
+    event.rejectionReason = undefined;
+    return event.save();
+  }
+
   async softDelete(id: string, deletedBy: string): Promise<EventDocument> {
     const updateDoc: any = {
       $set: {
@@ -590,7 +637,6 @@ export class EventsService {
         ...createTicketTypeDto,
         eventId: new Types.ObjectId(eventId),
         createdBy: new Types.ObjectId(createdBy),
-        status: EntityStatus.ACTIVE,
         ticketStatus: TicketStatus.AVAILABLE,
       };
 
@@ -601,11 +647,10 @@ export class EventsService {
     }
   }
 
-  async getEventTicketTypes(eventId: string): Promise<TicketType[]> {
+  async getEventTicketTypes(eventId: string): Promise<TicketTypeDocument[]> {
     return this.ticketTypeModel
       .find({
         eventId: new Types.ObjectId(eventId),
-        status: EntityStatus.ACTIVE,
       })
       .populate('createdBy', 'email role')
       .sort({ createdAt: 1 })
@@ -667,7 +712,7 @@ export class EventsService {
     while (
       await this.eventModel.findOne({
         slug,
-        status: { $ne: EntityStatus.DELETED },
+        eventStatus: { $ne: EventStatus.DELETED },
       })
     ) {
       slug = `${baseSlug}-${counter}`;
@@ -684,7 +729,6 @@ export class EventsService {
       {
         $match: {
           eventId: new Types.ObjectId(eventId),
-          status: EntityStatus.ACTIVE,
         },
       },
       {
@@ -729,7 +773,7 @@ export class EventsService {
       {
         $match: {
           companyId: new Types.ObjectId(companyId),
-          status: { $ne: EntityStatus.DELETED },
+          eventStatus: { $ne: EventStatus.DELETED },
         },
       },
       {
@@ -744,7 +788,7 @@ export class EventsService {
       {
         $match: {
           companyId: new Types.ObjectId(companyId),
-          status: { $ne: EntityStatus.DELETED },
+          eventStatus: { $ne: EventStatus.DELETED },
         },
       },
       {

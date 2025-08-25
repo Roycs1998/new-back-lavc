@@ -18,26 +18,9 @@ import { PersonsService } from 'src/persons/persons.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
 import { UserFilterDto } from './dto/user-filter.dto';
-
-const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const asDate = (v?: string | Date) => {
-  if (!v) return undefined;
-  const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-};
-
-const sanitizeFlat = <T extends Record<string, any>>(dto: T) => {
-  const banned = new Set(['_id', '__v', 'createdAt', 'updatedAt']);
-  const out: Record<string, any> = {};
-  for (const [k, v] of Object.entries(dto)) {
-    if (banned.has(k)) continue;
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
-};
+import { asDate } from 'src/utils/asDate';
+import { escapeRegex } from 'src/utils/escapeRegex';
+import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 
 @Injectable()
 export class UsersService {
@@ -60,10 +43,10 @@ export class UsersService {
     }
 
     try {
-      const email = normalizeEmail(dto.email);
+      const email = dto.email.trim().toLowerCase();
       const exists = await this.userModel.exists({
         email,
-        status: { $ne: EntityStatus.DELETED },
+        entityStatus: { $ne: EntityStatus.DELETED },
       });
       if (exists) throw new ConflictException('Email already exists');
 
@@ -76,7 +59,7 @@ export class UsersService {
         companyId: dto.companyId
           ? new Types.ObjectId(dto.companyId)
           : undefined,
-        status: EntityStatus.ACTIVE,
+        entityStatus: EntityStatus.ACTIVE,
       });
       return await user.save();
     } catch (error: any) {
@@ -90,10 +73,10 @@ export class UsersService {
   async createUserWithPerson(
     dto: CreateUserWithPersonDto,
   ): Promise<{ user: UserDocument; person: any }> {
-    const email = normalizeEmail(dto.email);
+    const email = dto.email.trim().toLowerCase();
     const existingUser = await this.userModel.findOne({
       email,
-      status: { $ne: EntityStatus.DELETED },
+      entityStatus: { $ne: EntityStatus.DELETED },
     });
     if (existingUser) throw new BadRequestException('Email already exists');
 
@@ -126,7 +109,7 @@ export class UsersService {
       limit = 10,
       sort = 'createdAt',
       order = 'desc',
-      status,
+      entityStatus,
       role,
       companyId,
       emailVerified,
@@ -139,20 +122,22 @@ export class UsersService {
     const safePage = Math.max(Number(page) || 1, 1);
     const skip = (safePage - 1) * safeLimit;
 
-    const match: Record<string, any> = {};
-    if (status) match.status = status;
-    else match.status = { $ne: EntityStatus.DELETED };
+    const filter: Record<string, any> = {};
 
-    if (role) match.role = role;
-    if (companyId) match.companyId = new Types.ObjectId(companyId);
-    if (typeof emailVerified === 'boolean') match.emailVerified = emailVerified;
+    if (entityStatus) filter.entityStatus = entityStatus;
+    else filter.entityStatus = { $ne: EntityStatus.DELETED };
+
+    if (role) filter.role = role;
+    if (companyId) filter.companyId = new Types.ObjectId(companyId);
+    if (typeof emailVerified === 'boolean')
+      filter.emailVerified = emailVerified;
 
     const from = asDate(createdFrom);
     const to = asDate(createdTo);
     if (from || to) {
-      match.createdAt = {};
-      if (from) match.createdAt.$gte = from;
-      if (to) match.createdAt.$lte = to;
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = from;
+      if (to) filter.createdAt.$lte = to;
     }
 
     const searchMatch = search?.trim()
@@ -180,7 +165,7 @@ export class UsersService {
       'updatedAt',
       'email',
       'role',
-      'status',
+      'entityStatus',
       'lastLogin',
       'person.firstName',
       'person.lastName',
@@ -192,7 +177,7 @@ export class UsersService {
     };
 
     const pipeline: any[] = [
-      { $match: match },
+      { $match: filter },
       {
         $lookup: {
           from: 'persons',
@@ -239,7 +224,7 @@ export class UsersService {
 
   async findOne(id: string, includeDeleted = false): Promise<UserDocument> {
     const filter: any = { _id: id };
-    if (!includeDeleted) filter.status = { $ne: EntityStatus.DELETED };
+    if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     const user = await this.userModel
       .findOne(filter)
@@ -255,8 +240,8 @@ export class UsersService {
     email: string,
     includeDeleted = false,
   ): Promise<UserDocument | null> {
-    const filter: any = { email: normalizeEmail(email) };
-    if (!includeDeleted) filter.status = { $ne: EntityStatus.DELETED };
+    const filter: any = { email: email.trim().toLowerCase() };
+    if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     return this.userModel
       .findOne(filter)
@@ -268,8 +253,8 @@ export class UsersService {
   async findByEmailForAuth(email: string): Promise<UserDocument | null> {
     return this.userModel
       .findOne({
-        email: normalizeEmail(email),
-        status: { $ne: EntityStatus.DELETED },
+        email: email.trim().toLowerCase(),
+        entityStatus: { $ne: EntityStatus.DELETED },
       })
       .select('+password')
       .exec();
@@ -280,7 +265,7 @@ export class UsersService {
     includeDeleted = false,
   ): Promise<UserDocument | null> {
     const filter: any = { personId: new Types.ObjectId(personId) };
-    if (!includeDeleted) filter.status = { $ne: EntityStatus.DELETED };
+    if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     return this.userModel
       .findOne(filter)
@@ -302,10 +287,10 @@ export class UsersService {
     }
 
     try {
-      if (dto.email) dto.email = normalizeEmail(dto.email);
+      if (dto.email) dto.email = dto.email.trim().toLowerCase();
 
       const existing = await this.userModel
-        .findOne({ _id: id, status: { $ne: EntityStatus.DELETED } })
+        .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
         .lean();
       if (!existing) throw new NotFoundException('User not found');
 
@@ -313,7 +298,7 @@ export class UsersService {
         const dup = await this.userModel.exists({
           _id: { $ne: id },
           email: dto.email,
-          status: { $ne: EntityStatus.DELETED },
+          entityStatus: { $ne: EntityStatus.DELETED },
         });
         if (dup) throw new ConflictException('Email already exists');
       }
@@ -333,7 +318,7 @@ export class UsersService {
 
       const updated = await this.userModel
         .findOneAndUpdate(
-          { _id: id, status: { $ne: EntityStatus.DELETED } },
+          { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
           { $set, $currentDate: { updatedAt: true } },
           { new: true, runValidators: true, context: 'query' },
         )
@@ -356,7 +341,7 @@ export class UsersService {
 
     const user = await this.userModel
       .findOneAndUpdate(
-        { _id: id, status: { $ne: EntityStatus.DELETED } },
+        { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
         {
           $set: { password: hashedPassword },
           $currentDate: { updatedAt: true },
@@ -374,7 +359,7 @@ export class UsersService {
   async updateLastLogin(id: string): Promise<void> {
     await this.userModel
       .findOneAndUpdate(
-        { _id: id, status: { $ne: EntityStatus.DELETED } },
+        { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
         { $currentDate: { lastLogin: true, updatedAt: true } },
       )
       .exec();
@@ -383,7 +368,7 @@ export class UsersService {
   async verifyEmail(id: string): Promise<UserDocument> {
     const user = await this.userModel
       .findOneAndUpdate(
-        { _id: id, status: { $ne: EntityStatus.DELETED } },
+        { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
         {
           $set: { emailVerified: true },
           $unset: { emailVerificationToken: '' },
@@ -401,15 +386,15 @@ export class UsersService {
 
   async changeStatus(
     id: string,
-    status: EntityStatus,
+    entityStatus: EntityStatus,
     changedBy?: string,
   ): Promise<UserDocument> {
     const update: any = {
-      $set: { status },
+      $set: { entityStatus },
       $currentDate: { updatedAt: true },
     };
 
-    if (status === EntityStatus.DELETED) {
+    if (entityStatus === EntityStatus.DELETED) {
       update.$currentDate.deletedAt = true;
       if (changedBy) update.$set.deletedBy = new Types.ObjectId(changedBy);
     } else {
@@ -431,19 +416,7 @@ export class UsersService {
   }
 
   async softDelete(id: string, deletedBy?: string): Promise<UserDocument> {
-    const $set: Record<string, any> = { status: EntityStatus.DELETED };
-    if (deletedBy) $set.deletedBy = new Types.ObjectId(deletedBy);
-
-    const doc = await this.userModel
-      .findOneAndUpdate(
-        { _id: id, status: { $ne: EntityStatus.DELETED } },
-        { $set, $currentDate: { updatedAt: true, deletedAt: true } },
-        { new: true },
-      )
-      .exec();
-
-    if (!doc) throw new NotFoundException('User not found');
-    return doc;
+    return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
   }
 
   async validatePassword(
@@ -471,7 +444,7 @@ export class UsersService {
       .findOne({
         emailVerificationToken: token.trim(),
         emailVerified: { $ne: true },
-        status: { $ne: EntityStatus.DELETED },
+        entityStatus: { $ne: EntityStatus.DELETED },
       })
       .select({ _id: 1 })
       .lean();
@@ -496,7 +469,7 @@ export class UsersService {
       .findOne({
         passwordResetToken: tokenTrim,
         passwordResetExpires: { $gt: now },
-        status: { $ne: EntityStatus.DELETED },
+        entityStatus: { $ne: EntityStatus.DELETED },
       })
       .select({ _id: 1 })
       .lean();

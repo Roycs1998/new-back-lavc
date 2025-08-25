@@ -4,6 +4,8 @@ export default registerAs('app', () => ({
   port: parseInt(process.env.PORT || '3001'),
   nodeEnv: process.env.NODE_ENV || 'development',
   apiPrefix: process.env.API_PREFIX || 'api/v1',
+  culqiSecretKey: process.env.CULQI_SECRET_KEY || 'api/v1',
+  qrSecret: process.env.QR_SECRET || 'default-secret-key',
   swagger: {
     title: process.env.SWAGGER_TITLE || 'Event Platform API',
     description:

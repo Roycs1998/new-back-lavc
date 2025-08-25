@@ -2,11 +2,9 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
-export type SpeakerDocument = Speaker &
-  Document & { _id: Types.ObjectId; status: EntityStatus };
+export type SpeakerDocument = Speaker & Document & { _id: Types.ObjectId };
 
 export type UploadSource = 'manual' | 'excel' | 'csv' | 'bulk_import';
-export type Status = 'active' | 'inactive' | 'deleted';
 
 @Schema({ _id: false })
 class SocialMedia {
@@ -16,7 +14,6 @@ class SocialMedia {
   @Prop({ type: String, trim: true, match: /^https?:\/\// }) github?: string;
 }
 const SocialMediaSchema = SchemaFactory.createForClass(SocialMedia);
-Object.assign(SocialMediaSchema.options as any, { skipSoftDeletePlugin: true });
 
 @Schema({ _id: false })
 class AudienceSize {
@@ -24,9 +21,6 @@ class AudienceSize {
   @Prop({ type: Number, min: 0 }) max?: number;
 }
 const AudienceSizeSchema = SchemaFactory.createForClass(AudienceSize);
-Object.assign(AudienceSizeSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 AudienceSizeSchema.pre('validate', function (next) {
   const self = this as any as AudienceSize;
@@ -128,13 +122,26 @@ export class Speaker {
 
   @Prop({ trim: true })
   notes?: string;
+
+  @Prop({
+    type: String,
+    enum: EntityStatus,
+    default: EntityStatus.ACTIVE,
+  })
+  entityStatus: EntityStatus;
+
+  @Prop({ type: Date })
+  deletedAt: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy: Types.ObjectId;
 }
 
 export const SpeakerSchema = SchemaFactory.createForClass(Speaker);
 
 SpeakerSchema.index({ personId: 1 });
-SpeakerSchema.index({ companyId: 1, status: 1 });
-SpeakerSchema.index({ specialty: 1, status: 1 });
+SpeakerSchema.index({ companyId: 1, entityStatus: 1 });
+SpeakerSchema.index({ specialty: 1, entityStatus: 1 });
 SpeakerSchema.index({ uploadedVia: 1 });
 SpeakerSchema.index({ createdBy: 1 });
 SpeakerSchema.index(

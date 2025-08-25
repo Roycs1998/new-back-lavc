@@ -14,6 +14,8 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventType } from '../../common/enums/event-type.enum';
+import { EventLocationType } from 'src/common/enums/event-location-type.enum';
+import { AgendaItemType } from 'src/common/enums/agenda-item-type.enum';
 
 class AddressDto {
   @ApiPropertyOptional({ description: 'Street address' })
@@ -65,10 +67,10 @@ class VirtualDetailsDto {
 class EventLocationDto {
   @ApiProperty({
     description: 'Location type',
-    enum: ['physical', 'virtual', 'hybrid'],
+    enum: EventLocationType,
   })
-  @IsEnum(['physical', 'virtual', 'hybrid'])
-  type: 'physical' | 'virtual' | 'hybrid';
+  @IsEnum(EventLocationType)
+  type: EventLocationType;
 
   @ApiPropertyOptional({ description: 'Venue name' })
   @IsOptional()
@@ -117,11 +119,11 @@ class AgendaItemDto {
 
   @ApiPropertyOptional({
     description: 'Item type',
-    enum: ['presentation', 'break', 'networking', 'qa', 'other'],
+    enum: AgendaItemType,
   })
   @IsOptional()
-  @IsEnum(['presentation', 'break', 'networking', 'qa', 'other'])
-  type?: 'presentation' | 'break' | 'networking' | 'qa' | 'other';
+  @IsEnum(AgendaItemType)
+  type?: AgendaItemType;
 }
 
 class RegistrationSettingsDto {

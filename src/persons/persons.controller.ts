@@ -5,11 +5,11 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   HttpCode,
   HttpStatus,
   Query,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { PersonsService } from './persons.service';
 import { CreatePersonDto } from './dto/create-person.dto';
@@ -27,9 +27,9 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import { PersonFilterDto } from './dto/person-filter.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
+import { StatusDto } from 'src/common/dto/status.dto';
 
 @ApiTags('Persons')
 @Controller('persons')
@@ -94,9 +94,26 @@ export class PersonsController {
   })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
-    @Body('status') status: EntityStatus,
+    @Body() dto: StatusDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
-    return this.personsService.changeStatus(id, status, currentUser.id);
+    return this.personsService.changeStatus(
+      id,
+      dto.entityStatus,
+      currentUser.id,
+    );
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Soft delete person by ID' })
+  @ApiResponse({ status: 204, description: 'User soft-deleted successfully' })
+  async softDelete(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @CurrentUser() currentUser: CurrentUserData,
+  ): Promise<void> {
+    await this.personsService.softDelete(id, currentUser.id);
   }
 }

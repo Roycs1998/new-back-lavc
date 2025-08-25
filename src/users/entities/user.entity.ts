@@ -3,13 +3,13 @@ import { Document, Types } from 'mongoose';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { UserRole } from 'src/common/enums/user-role.enum';
 
-export type UserDocument = User &
-  Document & { _id: Types.ObjectId; status: EntityStatus };
+export type UserDocument = User & Document & { _id: Types.ObjectId };
 
 @Schema({
   collection: 'users',
   versionKey: false,
   timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  id: false,
   toJSON: {
     virtuals: true,
     transform: (_doc, ret) => {
@@ -57,6 +57,19 @@ export class User {
 
   @Prop()
   passwordResetExpires?: Date;
+
+  @Prop({
+    type: String,
+    enum: EntityStatus,
+    default: EntityStatus.ACTIVE,
+  })
+  entityStatus: EntityStatus;
+
+  @Prop({ type: Date })
+  deletedAt: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy: Types.ObjectId;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
@@ -79,7 +92,7 @@ UserSchema.index(
   { email: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: { $ne: EntityStatus.DELETED } },
+    partialFilterExpression: { entityStatus: { $ne: EntityStatus.DELETED } },
   },
 );
 

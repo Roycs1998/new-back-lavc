@@ -9,10 +9,15 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import appConfig from './config/app.config';
 import { softDeletePlugin } from './common/plugins/mongoose/soft-delete.plugin';
-import { PassportModule } from '@nestjs/passport';
+
 import { AuthModule } from './auth/auth.module';
 import { SpeakersModule } from './speakers/speakers.module';
 import { EventsModule } from './events/events.module';
+import { OrdersModule } from './orders/orders.module';
+import { PaymentsModule } from './payments/payments.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { QRModule } from './qr/qr.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -39,6 +44,11 @@ import { EventsModule } from './events/events.module';
     AuthModule,
     SpeakersModule,
     EventsModule,
+    OrdersModule,
+    PaymentsModule,
+    TicketsModule,
+    QRModule,
+    AnalyticsModule,
   ],
   controllers: [],
   providers: [],

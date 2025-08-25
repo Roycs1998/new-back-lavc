@@ -7,11 +7,10 @@ export class BaseFilterDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter by entity status',
     enum: EntityStatus,
-    default: EntityStatus.ACTIVE,
   })
   @IsOptional()
   @IsEnum(EntityStatus)
-  status?: EntityStatus = EntityStatus.ACTIVE;
+  entityStatus?: EntityStatus = EntityStatus.ACTIVE;
 
   @ApiPropertyOptional({ description: 'Filter by creation date from' })
   @IsOptional()

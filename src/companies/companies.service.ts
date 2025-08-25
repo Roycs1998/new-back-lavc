@@ -4,36 +4,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateCompanyDto } from './dto/create-company.dto';
-import { UpdateCompanyDto } from './dto/update-company.dto';
+
 import { InjectModel } from '@nestjs/mongoose';
-import { Company, CompanyDocument } from './entities/company.entity';
+
 import { Model, SortOrder, Types } from 'mongoose';
+
 import { CompanyType } from 'src/common/enums/company-type.enum';
 import { PaginatedResult } from 'src/common/interface/pagination.interface';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
+
+import { CreateCompanyDto } from './dto/create-company.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyFilterDto } from './dto/company-filter.dto';
-import { ChangeCompanyStatusDto } from './dto/change-company-status.dto';
 
-const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const asDate = (v?: string | Date) => {
-  if (!v) return undefined;
-  const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-};
-
-const sanitizeFlat = <T extends Record<string, any>>(dto: T) => {
-  const banned = new Set(['_id', '__v', 'createdAt', 'updatedAt']);
-  const out: Record<string, any> = {};
-  for (const [k, v] of Object.entries(dto)) {
-    if (banned.has(k)) continue;
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
-};
+import { Company, CompanyDocument } from './entities/company.entity';
+import { sanitizeFlat } from 'src/utils/sanitizeFlat';
+import { escapeRegex } from 'src/utils/escapeRegex';
+import { asDate } from 'src/utils/asDate';
+import { normalizeEmail } from 'src/utils/normalizeEmail';
 
 @Injectable()
 export class CompaniesService {
@@ -63,7 +51,7 @@ export class CompaniesService {
       sort = 'createdAt',
       order = 'desc',
       search,
-      status,
+      entityStatus,
       type,
       country,
       city,
@@ -76,15 +64,12 @@ export class CompaniesService {
     const skip = (safePage - 1) * safeLimit;
 
     const filter: Record<string, any> = {};
-    if (status) {
-      filter.status = status;
-    } else {
-      filter.status = { $ne: EntityStatus.DELETED };
-    }
+
+    if (entityStatus) filter.entityStatus = entityStatus;
+    else filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     if (type) filter.type = type as CompanyType;
 
-    // filtros por address.* (case-insensitive exact)
     if (country?.trim()) {
       filter['address.country'] = {
         $regex: `^${escapeRegex(country.trim())}$`,
@@ -98,8 +83,8 @@ export class CompaniesService {
       };
     }
 
-    const from = asDate((filterDto as any).createdFrom);
-    const to = asDate((filterDto as any).createdTo);
+    const from = asDate(createdFrom);
+    const to = asDate(createdTo);
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = from;
@@ -121,7 +106,7 @@ export class CompaniesService {
       'name',
       'contactEmail',
       'type',
-      'status',
+      'entityStatus',
       'commissionRate',
       'approvedAt',
     ] as const);
@@ -154,7 +139,7 @@ export class CompaniesService {
 
   async findOne(id: string, includeDeleted = false): Promise<CompanyDocument> {
     const query: any = { _id: id };
-    if (!includeDeleted) query.status = { $ne: EntityStatus.DELETED };
+    if (!includeDeleted) query.entityStatus = { $ne: EntityStatus.DELETED };
 
     const company = await this.companyModel.findOne(query).exec();
     if (!company)
@@ -175,7 +160,7 @@ export class CompaniesService {
       if (dto.contactEmail) dto.contactEmail = normalizeEmail(dto.contactEmail);
 
       const existing = await this.companyModel
-        .findOne({ _id: id, status: { $ne: EntityStatus.DELETED } })
+        .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
         .lean();
       if (!existing) throw new NotFoundException('Company not found');
 
@@ -183,7 +168,7 @@ export class CompaniesService {
         const dup = await this.companyModel.exists({
           _id: { $ne: id },
           contactEmail: dto.contactEmail,
-          status: { $ne: EntityStatus.DELETED },
+          entityStatus: { $ne: EntityStatus.DELETED },
         });
         if (dup) throw new ConflictException('Contact email already exists');
       }
@@ -197,7 +182,7 @@ export class CompaniesService {
 
       const updated = await this.companyModel
         .findOneAndUpdate(
-          { _id: id, status: { $ne: EntityStatus.DELETED } },
+          { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
           { $set, $currentDate: { updatedAt: true } },
           { new: true, runValidators: true, context: 'query' },
         )
@@ -215,17 +200,15 @@ export class CompaniesService {
 
   async changeStatus(
     id: string,
-    dto: ChangeCompanyStatusDto,
+    entityStatus: EntityStatus,
     changedBy?: string,
   ): Promise<CompanyDocument> {
-    const { status } = dto;
-
     const update: any = {
-      $set: { status },
+      $set: { entityStatus },
       $currentDate: { updatedAt: true },
     };
 
-    if (status === EntityStatus.DELETED) {
+    if (entityStatus === EntityStatus.DELETED) {
       update.$currentDate.deletedAt = true;
       if (changedBy) update.$set.deletedBy = new Types.ObjectId(changedBy);
     } else {
@@ -245,18 +228,6 @@ export class CompaniesService {
   }
 
   async softDelete(id: string, deletedBy?: string): Promise<CompanyDocument> {
-    const $set: Record<string, any> = { status: EntityStatus.DELETED };
-    if (deletedBy) $set.deletedBy = new Types.ObjectId(deletedBy);
-
-    const doc = await this.companyModel
-      .findOneAndUpdate(
-        { _id: id, status: { $ne: EntityStatus.DELETED } },
-        { $set, $currentDate: { updatedAt: true, deletedAt: true } },
-        { new: true },
-      )
-      .exec();
-
-    if (!doc) throw new NotFoundException('Company not found');
-    return doc;
+    return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
   }
 }

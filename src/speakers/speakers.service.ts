@@ -20,6 +20,8 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
 import { PersonDocument } from 'src/persons/entities/person.entity';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
+import { toObjectId } from 'src/utils/toObjectId';
+import { sanitizeDefined } from 'src/utils/sanitizeDefined';
 
 export interface CompanySpeakerStats {
   totalSpeakers: number;
@@ -30,16 +32,6 @@ export interface CompanySpeakerStats {
   uploadMethods: string[];
   topSpecialties: { specialty: string; count: number }[];
 }
-
-const toObjectId = (id: string): Types.ObjectId => new Types.ObjectId(id);
-
-const sanitizeDefined = <T extends object>(obj: T): Partial<T> => {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) out[k] = v;
-  }
-  return out as Partial<T>;
-};
 
 const aggregationLookups: PipelineStage[] = [
   {
@@ -86,14 +78,14 @@ export class SpeakersService {
     createdBy?: string,
   ): Promise<SpeakerDocument> {
     const company = await this.companiesService.findOne(dto.companyId);
-    if (company.status !== EntityStatus.ACTIVE)
+    if (company.entityStatus !== EntityStatus.ACTIVE)
       throw new BadRequestException('Company is not active');
 
     const doc = new this.speakerModel({
       ...dto,
       personId: toObjectId(dto.personId),
       companyId: toObjectId(dto.companyId),
-      status: EntityStatus.ACTIVE,
+      entityStatus: EntityStatus.ACTIVE,
       createdBy: createdBy ? toObjectId(createdBy) : undefined,
     });
 
@@ -105,7 +97,7 @@ export class SpeakersService {
     createdBy?: string,
   ): Promise<{ speaker: SpeakerDocument; person: PersonDocument }> {
     const company = await this.companiesService.findOne(dto.companyId);
-    if (company.status !== EntityStatus.ACTIVE)
+    if (company.entityStatus !== EntityStatus.ACTIVE)
       throw new BadRequestException('Company is not active');
 
     const person = await this.personsService.createForSpeaker(dto);
@@ -155,10 +147,9 @@ export class SpeakersService {
       limit = 10,
       sort = 'createdAt',
       order = 'desc',
-      status,
+      entityStatus,
       companyId,
       specialty,
-      isAvailable,
       minExperience,
       maxExperience,
       language,
@@ -175,7 +166,7 @@ export class SpeakersService {
     const skip = (page - 1) * limit;
 
     const match: Record<string, any> = {
-      status: status || EntityStatus.ACTIVE,
+      entityStatus: entityStatus || EntityStatus.ACTIVE,
     };
 
     if (
@@ -188,7 +179,6 @@ export class SpeakersService {
     }
 
     if (specialty) match.specialty = { $regex: specialty, $options: 'i' };
-    if (isAvailable !== undefined) match.isAvailable = isAvailable;
 
     if (minExperience !== undefined || maxExperience !== undefined) {
       match.yearsExperience = {};
@@ -264,7 +254,7 @@ export class SpeakersService {
   ): Promise<Speaker> {
     const filter: any = { _id: id };
     if (!includeDeleted) {
-      filter.status = { $ne: EntityStatus.DELETED };
+      filter.entityStatus = { $ne: EntityStatus.DELETED };
     }
 
     const speaker = await this.speakerModel
@@ -309,7 +299,7 @@ export class SpeakersService {
     }
 
     const filter: Record<string, any> = { companyId: toObjectId(companyId) };
-    filter.status = includeInactive
+    filter.entityStatus = includeInactive
       ? { $ne: EntityStatus.DELETED }
       : EntityStatus.ACTIVE;
 
@@ -336,7 +326,7 @@ export class SpeakersService {
 
       const updated = await this.speakerModel
         .findOneAndUpdate(
-          { _id: id, status: { $ne: EntityStatus.DELETED } },
+          { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
           { $set, $currentDate: { updatedAt: true } },
           { new: true, runValidators: true, context: 'query' },
         )
@@ -357,15 +347,15 @@ export class SpeakersService {
 
   async changeStatus(
     id: string,
-    status: EntityStatus,
+    entityStatus: EntityStatus,
     changedBy?: string,
   ): Promise<SpeakerDocument> {
     const $set: Record<string, any> = {
-      status,
+      entityStatus,
       updatedBy: changedBy ? toObjectId(changedBy) : undefined,
     };
 
-    if (status === EntityStatus.DELETED) {
+    if (entityStatus === EntityStatus.DELETED) {
       $set.deletedAt = new Date();
       if (changedBy) $set.deletedBy = toObjectId(changedBy);
     } else {
@@ -450,7 +440,7 @@ export class SpeakersService {
         {
           $match: {
             companyId: companyObjId,
-            status: { $ne: EntityStatus.DELETED },
+            entityStatus: { $ne: EntityStatus.DELETED },
           },
         },
         {
@@ -459,7 +449,7 @@ export class SpeakersService {
             totalSpeakers: { $sum: 1 },
             activeSpeakers: {
               $sum: {
-                $cond: [{ $eq: ['$status', EntityStatus.ACTIVE] }, 1, 0],
+                $cond: [{ $eq: ['$entityStatus', EntityStatus.ACTIVE] }, 1, 0],
               },
             },
             availableSpeakers: {
@@ -467,7 +457,7 @@ export class SpeakersService {
                 $cond: [
                   {
                     $and: [
-                      { $eq: ['$status', EntityStatus.ACTIVE] },
+                      { $eq: ['$entityStatus', EntityStatus.ACTIVE] },
                       { $eq: ['$isAvailable', true] },
                     ],
                   },
@@ -497,7 +487,12 @@ export class SpeakersService {
 
     const top = await this.speakerModel
       .aggregate([
-        { $match: { companyId: companyObjId, status: EntityStatus.ACTIVE } },
+        {
+          $match: {
+            companyId: companyObjId,
+            entityStatus: EntityStatus.ACTIVE,
+          },
+        },
         { $group: { _id: '$specialty', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 5 },

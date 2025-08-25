@@ -9,7 +9,6 @@ import {
   HttpCode,
   HttpStatus,
   Query,
-  ParseEnumPipe,
   UseGuards,
 } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
@@ -22,13 +21,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
-import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CompanyFilterDto } from './dto/company-filter.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user-role.enum';
-import { ChangeCompanyStatusDto } from './dto/change-company-status.dto';
+import { StatusDto } from 'src/common/dto/status.dto';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 
 @ApiTags('Companies')
 @Controller('companies')
@@ -94,9 +94,14 @@ export class CompaniesController {
   @ApiResponse({ status: 404, description: 'Company not found' })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
-    @Body() dto: ChangeCompanyStatusDto,
+    @Body() dto: StatusDto,
+    @CurrentUser() currentUser: CurrentUserData,
   ) {
-    return this.companiesService.changeStatus(id, dto);
+    return this.companiesService.changeStatus(
+      id,
+      dto.entityStatus,
+      currentUser.id,
+    );
   }
 
   @Delete(':id')
@@ -110,7 +115,10 @@ export class CompaniesController {
     description: 'Company soft-deleted successfully',
   })
   @ApiResponse({ status: 404, description: 'Company not found' })
-  async remove(@Param('id', ParseObjectIdPipe) id: string) {
-    await this.companiesService.softDelete(id);
+  async remove(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @CurrentUser() currentUser: CurrentUserData,
+  ) {
+    await this.companiesService.softDelete(id, currentUser.id);
   }
 }

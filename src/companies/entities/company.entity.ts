@@ -5,7 +5,6 @@ import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
 export type CompanyDocument = HydratedDocument<Company> & {
   _id: Types.ObjectId;
-  status: EntityStatus;
 };
 
 @Schema({ _id: false })
@@ -18,8 +17,6 @@ export class Address {
 }
 export const AddressSchema = SchemaFactory.createForClass(Address);
 
-Object.assign(AddressSchema.options as any, { skipSoftDeletePlugin: true });
-
 @Schema({ _id: false })
 export class CompanySettings {
   @Prop({ type: Boolean, default: true }) canUploadSpeakers!: boolean;
@@ -28,9 +25,6 @@ export class CompanySettings {
 }
 export const CompanySettingsSchema =
   SchemaFactory.createForClass(CompanySettings);
-Object.assign(CompanySettingsSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 export class CompanySubscription {
@@ -39,9 +33,6 @@ export class CompanySubscription {
 }
 export const CompanySubscriptionSchema =
   SchemaFactory.createForClass(CompanySubscription);
-Object.assign(CompanySubscriptionSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({
   collection: 'companies',
@@ -104,16 +95,29 @@ export class Company {
 
   @Prop()
   approvedAt?: Date;
+
+  @Prop({
+    type: String,
+    enum: EntityStatus,
+    default: EntityStatus.ACTIVE,
+  })
+  entityStatus: EntityStatus;
+
+  @Prop({ type: Date })
+  deletedAt: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy: Types.ObjectId;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
 
-CompanySchema.index({ status: 1, type: 1 });
+CompanySchema.index({ entityStatus: 1, type: 1 });
 CompanySchema.index({ name: 'text', description: 'text' });
 CompanySchema.index(
   { contactEmail: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: { $ne: EntityStatus.DELETED } },
+    partialFilterExpression: { entityStatus: { $ne: EntityStatus.DELETED } },
   },
 );

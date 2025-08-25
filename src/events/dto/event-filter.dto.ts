@@ -11,9 +11,10 @@ import { Transform } from 'class-transformer';
 import { BaseFilterDto } from '../../common/dto/base-filter.dto';
 import { EventType } from '../../common/enums/event-type.enum';
 import { EventStatus } from '../../common/enums/event-status.enum';
+import { EventLocationType } from 'src/common/enums/event-location-type.enum';
 
 export class EventFilterDto extends OmitType(BaseFilterDto, [
-  'status',
+  'entityStatus',
 ] as const) {
   @ApiPropertyOptional({ description: 'Filter by company ID' })
   @IsOptional()
@@ -35,8 +36,8 @@ export class EventFilterDto extends OmitType(BaseFilterDto, [
 
   @ApiPropertyOptional({ description: 'Filter by location type' })
   @IsOptional()
-  @IsEnum(['physical', 'virtual', 'hybrid'])
-  locationType?: 'physical' | 'virtual' | 'hybrid';
+  @IsEnum(EventLocationType)
+  locationType?: EventLocationType;
 
   @ApiPropertyOptional({ description: 'Filter by city' })
   @IsOptional()

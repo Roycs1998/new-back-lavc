@@ -7,7 +7,7 @@ export function softDeletePlugin(
 ) {
   if (opts?.disable || (schema as any).options?.skipSoftDeletePlugin) return;
 
-  schema.add({
+  /* schema.add({
     status: {
       type: String,
       enum: Object.values(EntityStatus),
@@ -23,5 +23,5 @@ export function softDeletePlugin(
     this.deletedAt = new Date();
     this.deletedBy = by;
     return this;
-  };
+  }; */
 }

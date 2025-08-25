@@ -24,6 +24,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -75,7 +76,6 @@ export class EventsController {
   @Get('public')
   @Public()
   @ApiOperation({ summary: 'Get published events (public access)' })
-  @ApiBearerAuth('JWT-auth')
   @ApiResponse({
     status: 200,
     description: 'Published events retrieved successfully',
@@ -116,7 +116,6 @@ export class EventsController {
   @Get('slug/:slug')
   @Public()
   @ApiOperation({ summary: 'Get event by slug (public access)' })
-  @ApiBearerAuth('JWT-auth')
   @ApiResponse({ status: 200, description: 'Event found' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   findBySlug(@Param('slug') slug: string) {
@@ -190,6 +189,30 @@ export class EventsController {
       currentUser.id,
       dto.rejectionReason,
     );
+  }
+
+  @Post(':id/submit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_ADMIN, UserRole.PLATFORM_ADMIN)
+  @ApiOperation({
+    summary: 'Enviar evento a revisión',
+    description:
+      'Transiciona el evento de **DRAFT** a **PENDING_APPROVAL**. ' +
+      'Solo los administradores de la empresa dueña pueden ejecutar esta acción. ' +
+      'Precondiciones: el evento debe estar en estado **DRAFT** y pasar las validaciones básicas (fechas, location, capacity).',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID del evento (Mongo ObjectId)',
+    example: '66d0a1c9b8f2a84f0a3f1123',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiResponse({
+    status: 200,
+    description: 'Evento enviado a revisión (estado: PENDING_APPROVAL).',
+  })
+  submitForReview(@Param('id', ParseObjectIdPipe) id: string) {
+    return this.eventsService.submitForReview(id);
   }
 
   @Patch(':id/publish')

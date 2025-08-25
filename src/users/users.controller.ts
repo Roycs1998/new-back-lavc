@@ -10,7 +10,6 @@ import {
   HttpCode,
   HttpStatus,
   Query,
-  ParseEnumPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -29,9 +28,9 @@ import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
+import { StatusDto } from 'src/common/dto/status.dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -104,10 +103,10 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'User status updated successfully' })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
-    @Body('status', new ParseEnumPipe(EntityStatus)) status: EntityStatus,
+    @Body() dto: StatusDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
-    return this.usersService.changeStatus(id, status, currentUser.id);
+    return this.usersService.changeStatus(id, dto.entityStatus, currentUser.id);
   }
 
   @Patch(':id/verify-email')

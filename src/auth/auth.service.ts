@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
@@ -31,7 +30,7 @@ export interface AuthResponse {
     };
     company?: {
       name: string;
-      status: string;
+      entityStatus: string;
     };
   };
   access_token: string;
@@ -53,7 +52,7 @@ export class AuthService {
       return null;
     }
 
-    if (user.status !== EntityStatus.ACTIVE) {
+    if (user.entityStatus !== EntityStatus.ACTIVE) {
       throw new UnauthorizedException('Account is not active');
     }
 
@@ -104,7 +103,7 @@ export class AuthService {
         ...(user.companyId && {
           company: {
             name: user.companyId.name,
-            status: user.companyId.status,
+            entityStatus: user.companyId.entityStatus,
           },
         }),
       },
@@ -296,7 +295,7 @@ export class AuthService {
   ): Promise<{ access_token: string; expires_in: string }> {
     const user = await this.usersService.findOne(userId);
 
-    if (!user || user.status !== EntityStatus.ACTIVE) {
+    if (!user || user.entityStatus !== EntityStatus.ACTIVE) {
       throw new UnauthorizedException('User not found or inactive');
     }
 

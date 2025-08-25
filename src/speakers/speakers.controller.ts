@@ -28,6 +28,7 @@ import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
 import { Public } from 'src/common/decorators/public.decorator';
+import { StatusDto } from 'src/common/dto/status.dto';
 
 @Controller('speakers')
 export class SpeakersController {
@@ -133,10 +134,14 @@ export class SpeakersController {
   })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
-    @Body('status') status: EntityStatus,
+    @Body() dto: StatusDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
-    return this.speakersService.changeStatus(id, status, currentUser.id);
+    return this.speakersService.changeStatus(
+      id,
+      dto.entityStatus,
+      currentUser.id,
+    );
   }
 
   @Patch(':id/editable-users/:userId')

@@ -23,16 +23,6 @@ export class SpeakerFilterDto extends BaseFilterDto {
   @IsString()
   specialty?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by availability' })
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    return value;
-  })
-  @IsBoolean()
-  isAvailable?: boolean;
-
   @ApiPropertyOptional({ description: 'Minimum years of experience' })
   @IsOptional()
   @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))

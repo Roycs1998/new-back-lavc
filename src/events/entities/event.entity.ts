@@ -2,6 +2,8 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { EventStatus } from '../../common/enums/event-status.enum';
 import { EventType } from '../../common/enums/event-type.enum';
+import { EventLocationType } from 'src/common/enums/event-location-type.enum';
+import { AgendaItemType } from 'src/common/enums/agenda-item-type.enum';
 
 export type EventDocument = Event & Document;
 
@@ -23,9 +25,6 @@ class EventAddress {
   zipCode?: string;
 }
 const EventAddressSchema = SchemaFactory.createForClass(EventAddress);
-Object.assign(EventAddressSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 class EventVirtualDetails {
@@ -43,18 +42,15 @@ class EventVirtualDetails {
 }
 const EventVirtualDetailsSchema =
   SchemaFactory.createForClass(EventVirtualDetails);
-Object.assign(EventVirtualDetailsSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 class EventLocation {
   @Prop({
     type: String,
-    enum: ['physical', 'virtual', 'hybrid'],
+    enum: EventLocationType,
     required: true,
   })
-  type!: 'physical' | 'virtual' | 'hybrid';
+  type!: EventLocationType;
 
   @Prop({ trim: true })
   venue?: string;
@@ -69,9 +65,6 @@ class EventLocation {
   capacity?: number;
 }
 const EventLocationSchema = SchemaFactory.createForClass(EventLocation);
-Object.assign(EventLocationSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 class EventAgendaItem {
@@ -92,15 +85,12 @@ class EventAgendaItem {
 
   @Prop({
     type: String,
-    enum: ['presentation', 'break', 'networking', 'qa', 'other'],
-    default: 'presentation',
+    enum: AgendaItemType,
+    default: AgendaItemType.PRESENTATION,
   })
-  type!: 'presentation' | 'break' | 'networking' | 'qa' | 'other';
+  type!: AgendaItemType;
 }
 const EventAgendaItemSchema = SchemaFactory.createForClass(EventAgendaItem);
-Object.assign(EventAgendaItemSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 class EventRegistration {
@@ -124,9 +114,6 @@ class EventRegistration {
 }
 
 const EventRegistrationSchema = SchemaFactory.createForClass(EventRegistration);
-Object.assign(EventRegistrationSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 class EventSettings {
@@ -146,9 +133,6 @@ class EventSettings {
   specialInstructions?: string;
 }
 const EventSettingsSchema = SchemaFactory.createForClass(EventSettings);
-Object.assign(EventSettingsSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({
   collection: 'events',
@@ -156,7 +140,7 @@ Object.assign(EventSettingsSchema.options as any, {
   timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
 })
 export class Event {
-  @Prop({ type: String, required: true, trim: true, index: true })
+  @Prop({ type: String, required: true, trim: true })
   title!: string;
 
   @Prop({ type: String, required: false, trim: true })
@@ -165,17 +149,16 @@ export class Event {
   @Prop({ type: String, trim: true })
   shortDescription?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Company', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Company', required: true })
   companyId!: Types.ObjectId;
 
-  @Prop({ type: String, enum: EventType, required: true, index: true })
+  @Prop({ type: String, enum: EventType, required: true })
   type!: EventType;
 
   @Prop({
     type: String,
     enum: EventStatus,
     default: EventStatus.DRAFT,
-    index: true,
   })
   eventStatus!: EventStatus;
 
@@ -184,7 +167,7 @@ export class Event {
 
   @Prop({ type: Types.ObjectId, ref: 'User' }) deletedBy?: Types.ObjectId;
 
-  @Prop({ type: Date, required: true, index: true })
+  @Prop({ type: Date, required: true })
   startDate!: Date;
 
   @Prop({ type: Date, required: true })
@@ -247,8 +230,6 @@ export class Event {
 
 export const EventSchema = SchemaFactory.createForClass(Event);
 
-Object.assign(EventSchema.options as any, { skipSoftDeletePlugin: true });
-
 EventSchema.index({ companyId: 1, slug: 1 }, { unique: true, sparse: true });
 EventSchema.index({ companyId: 1, eventStatus: 1 });
 EventSchema.index({ startDate: 1, eventStatus: 1 });
@@ -289,7 +270,10 @@ EventSchema.pre('validate', function (next) {
   }
 
   const loc = this.location as EventLocation;
-  if (loc?.type === 'physical' || loc?.type === 'hybrid') {
+  if (
+    loc?.type === EventLocationType.PHYSICAL ||
+    loc?.type === EventLocationType.HYBRID
+  ) {
     if (!loc.address?.city || !loc.address?.country) {
       return next(
         new Error(
@@ -298,7 +282,10 @@ EventSchema.pre('validate', function (next) {
       );
     }
   }
-  if (loc?.type === 'virtual' || loc?.type === 'hybrid') {
+  if (
+    loc?.type === EventLocationType.VIRTUAL ||
+    loc?.type === EventLocationType.HYBRID
+  ) {
     if (!loc.virtualDetails?.meetingUrl) {
       return next(
         new Error(

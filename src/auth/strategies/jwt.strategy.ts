@@ -32,7 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const user = await this.usersService.findOne(userId);
 
-    if (!user || user.status !== EntityStatus.ACTIVE) {
+    if (!user || user.entityStatus !== EntityStatus.ACTIVE) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
