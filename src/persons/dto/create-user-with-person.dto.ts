@@ -5,14 +5,11 @@ import {
   IsEnum,
   IsMongoId,
   MinLength,
-  MaxLength,
-  IsDateString,
   IsNotEmpty,
-  IsPhoneNumber,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { UserRole } from 'src/common/enums/user-role.enum';
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { CreatePersonDto } from './create-person.dto';
 
 export class CreateUserWithPersonDto extends OmitType(CreatePersonDto, [

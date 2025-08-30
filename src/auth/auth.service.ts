@@ -16,27 +16,12 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
-
-export interface AuthResponse {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-    companyId?: string;
-    emailVerified: boolean;
-    person: {
-      firstName: string;
-      lastName: string;
-      phone?: string;
-    };
-    company?: {
-      name: string;
-      entityStatus: string;
-    };
-  };
-  access_token: string;
-  expires_in: string;
-}
+import { UserDto } from 'src/users/dto/user.dto';
+import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
+import { MessageResponseDto } from './dto/message-response.dto';
+import { AuthResponseDto } from './dto/auth-response.dto';
+import { UserDocument } from 'src/users/entities/user.entity';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class AuthService {
@@ -46,8 +31,12 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
+  async validateUser(
+    email: string,
+    password: string,
+  ): Promise<UserDocument | null> {
+    const user =
+      await this.usersService.findUserByEmailWithSensitiveFields(email);
 
     if (!user) {
       return null;
@@ -58,7 +47,7 @@ export class AuthService {
     }
 
     const isPasswordValid = await this.usersService.validatePassword(
-      user,
+      user.id,
       password,
     );
     if (!isPasswordValid) {
@@ -69,18 +58,18 @@ export class AuthService {
     return result;
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponse> {
+  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 
     const user = await this.validateUser(email, password);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Credenciales no válidas');
     }
 
-    await this.usersService.updateLastLogin(user._id);
+    await this.usersService.updateLastLogin(user.id);
 
     const payload: JwtPayload = {
-      sub: user._id.toString(),
+      sub: user.id,
       email: user.email,
       role: user.role,
       companyId: user.companyId?.toString(),
@@ -89,25 +78,12 @@ export class AuthService {
     const access_token = this.jwtService.sign(payload);
     const expires_in = this.configService.getOrThrow<string>('jwt.expiresIn');
 
-    const response: AuthResponse = {
-      user: {
-        id: user._id.toString(),
-        email: user.email,
-        role: user.role,
-        companyId: user.companyId?.toString(),
-        emailVerified: user.emailVerified,
-        person: {
-          firstName: user.personId.firstName,
-          lastName: user.personId.lastName,
-          phone: user.personId.phone,
-        },
-        ...(user.companyId && {
-          company: {
-            name: user.companyId.name,
-            entityStatus: user.companyId.entityStatus,
-          },
-        }),
-      },
+    const userDto = plainToInstance(UserDto, user.toJSON(), {
+      excludeExtraneousValues: true,
+    });
+
+    const response: AuthResponseDto = {
+      user: userDto,
       access_token,
       expires_in,
     };
@@ -115,13 +91,13 @@ export class AuthService {
     return response;
   }
 
-  async register(registerDto: RegisterDto): Promise<AuthResponse> {
+  async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     const { firstName, lastName, email, password, phone, dateOfBirth } =
       registerDto;
 
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
-      throw new ConflictException('Email already registered');
+      throw new ConflictException('Correo electrónico ya registrado');
     }
 
     try {
@@ -135,23 +111,25 @@ export class AuthService {
         role: UserRole.USER,
       };
 
-      const { user } =
+      const user =
         await this.usersService.createUserWithPerson(userWithPersonDto);
 
       const verificationToken = this.generateVerificationToken();
-      await this.usersService.update(user._id.toString(), {
+      await this.usersService.update(user.id.toString(), {
         emailVerificationToken: verificationToken,
       });
 
       return this.login({ email, password });
     } catch (error) {
-      throw new BadRequestException(error.message || 'Registration failed');
+      console.log(error, 'AQUI');
+
+      throw new BadRequestException(error.message || 'El registro ha fallado.');
     }
   }
 
   async registerCompanyAdmin(
     registerDto: RegisterDto & { companyId: string },
-  ): Promise<AuthResponse> {
+  ): Promise<AuthResponseDto> {
     const {
       firstName,
       lastName,
@@ -164,79 +142,71 @@ export class AuthService {
 
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
-      throw new ConflictException('Email already registered');
+      throw new ConflictException('Correo electrónico ya registrado');
     }
 
-    try {
-      const userWithPersonDto = {
-        firstName,
-        lastName,
-        email,
-        phone,
-        dateOfBirth,
-        password,
-        role: UserRole.COMPANY_ADMIN,
-        companyId,
-      };
+    const userWithPersonDto = {
+      firstName,
+      lastName,
+      email,
+      phone,
+      dateOfBirth,
+      password,
+      role: UserRole.COMPANY_ADMIN,
+      companyId,
+    };
 
-      const { user } =
-        await this.usersService.createUserWithPerson(userWithPersonDto);
+    const user =
+      await this.usersService.createUserWithPerson(userWithPersonDto);
 
-      const verificationToken = this.generateVerificationToken();
-      await this.usersService.update(user._id.toString(), {
-        emailVerificationToken: verificationToken,
-      });
+    const verificationToken = this.generateVerificationToken();
+    await this.usersService.update(user.id.toString(), {
+      emailVerificationToken: verificationToken,
+    });
 
-      return this.login({ email, password });
-    } catch (error) {
-      throw new BadRequestException(
-        error.message || 'Company admin registration failed',
-      );
-    }
+    return this.login({ email, password });
   }
 
   async changePassword(
     userId: string,
     changePasswordDto: ChangePasswordDto,
-  ): Promise<{ message: string }> {
+  ): Promise<MessageResponseDto> {
     const { currentPassword, newPassword } = changePasswordDto;
 
-    const user = await this.usersService.findByEmail(
-      (await this.usersService.findOne(userId)).email,
-    );
+    const user = await this.usersService.findOne(userId);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException('Usuario no encontrado');
     }
 
     const isCurrentPasswordValid = await this.usersService.validatePassword(
-      user,
+      user.id,
       currentPassword,
     );
 
     if (!isCurrentPasswordValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new UnauthorizedException('La contraseña actual es incorrecta.');
     }
 
     await this.usersService.updatePassword(userId, newPassword);
 
-    return { message: 'Password changed successfully' };
+    return { message: 'Contraseña cambiada correctamente' };
   }
 
   async forgotPassword(
     forgotPasswordDto: ForgotPasswordDto,
-  ): Promise<{ message: string }> {
+  ): Promise<MessageResponseDto> {
     const { email } = forgotPasswordDto;
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      return { message: 'If the email exists, a reset link has been sent' };
+      return { message: 'Usuario no encontrado' };
     }
 
     const resetToken = this.generateResetToken();
     const resetExpires = new Date(Date.now() + 3600000);
 
-    await this.usersService.update(user._id.toString(), {
+    await this.usersService.update(user.id.toString(), {
       passwordResetToken: resetToken,
       passwordResetExpires: resetExpires,
     });
@@ -246,65 +216,66 @@ export class AuthService {
 
     if (isDevelopment) {
       return {
-        message: 'Password reset token generated',
+        message: 'Se ha generado un token para restablecer la contraseña.',
       };
     }
 
-    return { message: 'If the email exists, a reset link has been sent' };
+    return {
+      message: 'Se ha enviado un enlace para restablecer la contraseña.',
+    };
   }
 
   async resetPassword(
     resetPasswordDto: ResetPasswordDto,
-  ): Promise<{ message: string }> {
+  ): Promise<MessageResponseDto> {
     const { token, newPassword } = resetPasswordDto;
 
-    const user = await this.usersService.findOne(
-      await this.usersService.findUserByResetToken(token),
-    );
+    const userId = await this.usersService.findUserByResetToken(token);
+    const user = await this.usersService.findUserWithSensitiveFields(userId);
 
     if (
       !user ||
       !user.passwordResetExpires ||
       user.passwordResetExpires < new Date()
     ) {
-      throw new UnauthorizedException('Invalid or expired reset token');
+      throw new UnauthorizedException(
+        'Token de restablecimiento no válido o caducado',
+      );
     }
 
-    await this.usersService.updatePassword(user._id.toString(), newPassword);
-    await this.usersService.update(user._id.toString(), {
+    await this.usersService.updatePassword(user.id.toString(), newPassword);
+    await this.usersService.update(user.id.toString(), {
       passwordResetToken: undefined,
       passwordResetExpires: undefined,
     });
 
-    return { message: 'Password reset successfully' };
+    return { message: 'Contraseña restablecida correctamente' };
   }
 
-  async verifyEmail(token: string): Promise<{ message: string }> {
+  async verifyEmail(token: string): Promise<MessageResponseDto> {
     const userId = await this.usersService.findUserByVerificationToken(token);
 
     if (!userId) {
-      throw new UnauthorizedException('Invalid verification token');
+      throw new UnauthorizedException('Token de verificación no válido');
     }
 
     await this.usersService.verifyEmail(userId);
 
-    return { message: 'Email verified successfully' };
+    return { message: 'Correo electrónico verificado correctamente' };
   }
 
-  async refreshToken(
-    userId: string,
-  ): Promise<{ access_token: string; expires_in: string }> {
+  async refreshToken(userId: string): Promise<RefreshTokenResponseDto> {
     const user = await this.usersService.findOne(userId);
 
     if (!user || user.entityStatus !== EntityStatus.ACTIVE) {
-      throw new UnauthorizedException('User not found or inactive');
+      throw new UnauthorizedException('Usuario no encontrado o inactivo');
     }
 
     const payload: JwtPayload = {
-      sub: user._id.toString(),
+      sub: user.id.toString(),
       email: user.email,
       role: user.role,
-      companyId: user.companyId?.toString(),
+      companyId: user.company?.id.toString(),
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -313,22 +284,14 @@ export class AuthService {
     return { access_token, expires_in };
   }
 
-  async getProfile(userId: string): Promise<any> {
+  async getProfile(userId: string): Promise<UserDto> {
     const user = await this.usersService.findOne(userId);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException('Usuario no encontrado');
     }
 
-    return {
-      id: user._id.toString(),
-      email: user.email,
-      role: user.role,
-      emailVerified: user.emailVerified,
-      lastLogin: user.lastLogin,
-      person: user.personId,
-      company: user.companyId,
-    };
+    return user;
   }
 
   private generateVerificationToken(): string {

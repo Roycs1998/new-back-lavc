@@ -66,7 +66,7 @@ class EventLocation {
 }
 const EventLocationSchema = SchemaFactory.createForClass(EventLocation);
 
-@Schema({ _id: false })
+@Schema({ _id: true })
 class EventAgendaItem {
   @Prop({ required: true, trim: true })
   title!: string;
@@ -162,10 +162,11 @@ export class Event {
   })
   eventStatus!: EventStatus;
 
-  @Prop()
+  @Prop({ type: Date })
   deletedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' }) deletedBy?: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy?: Types.ObjectId;
 
   @Prop({ type: Date, required: true })
   startDate!: Date;

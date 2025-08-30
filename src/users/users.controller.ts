@@ -31,64 +31,89 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 import { StatusDto } from 'src/common/dto/status.dto';
+import { UserDto } from './dto/user.dto';
+import { UserPaginatedDto } from './dto/user-pagination.dto';
 
-@ApiTags('Users')
-@Controller('users')
+@ApiTags('Usuarios')
 @ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Create a new user (Platform Admin only)' })
-  @ApiResponse({ status: 201, description: 'User created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
+  @ApiOperation({
+    summary: 'Crear un nuevo usuario (solo admin de plataforma)',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Usuario creado correctamente',
+    type: UserDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Error de validación en los datos',
+  })
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new user with person data' })
+  @ApiOperation({ summary: 'Registrar un usuario con sus datos personales' })
   @ApiResponse({
     status: 201,
-    description: 'User and person created successfully',
+    description: 'Usuario y persona creados correctamente',
+    type: UserDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - email already exists or validation error',
+    description: 'El correo ya existe o datos inválidos',
   })
   registerUserWithPerson(@Body() dto: CreateUserWithPersonDto) {
     return this.usersService.createUserWithPerson(dto);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Get users (paginated + filters)' })
-  @ApiResponse({ status: 200, description: 'Users retrieved successfully' })
+  @ApiOperation({
+    summary: 'Obtener todos los usuarios (con filtros y paginación)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Listado de usuarios obtenido correctamente',
+    type: UserPaginatedDto,
+  })
   findAll(@Query() filter: UserFilterDto) {
     return this.usersService.findAll(filter);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
-  @ApiOperation({ summary: 'Get user by ID' })
-  @ApiResponse({ status: 200, description: 'User found' })
-  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiOperation({ summary: 'Obtener un usuario por su ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario encontrado',
+    type: UserDto,
+  })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
   findOne(@Param('id', ParseObjectIdPipe) id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Update user by ID (Platform Admin only)' })
-  @ApiResponse({ status: 200, description: 'User updated successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiOperation({
+    summary: 'Actualizar un usuario por ID (solo admin plataforma)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario actualizado correctamente',
+    type: UserDto,
+  })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: UpdateUserDto,
@@ -97,10 +122,14 @@ export class UsersController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Change user status (ACTIVE/PENDING/DELETED)' })
-  @ApiResponse({ status: 200, description: 'User status updated successfully' })
+  @ApiOperation({ summary: 'Cambiar el estado del usuario (activo/eliminado)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado del usuario actualizado correctamente',
+    type: UserDto,
+  })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: StatusDto,
@@ -110,20 +139,23 @@ export class UsersController {
   }
 
   @Patch(':id/verify-email')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Verify user email' })
-  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  @ApiOperation({ summary: 'Verificar el correo electrónico del usuario' })
+  @ApiResponse({
+    status: 200,
+    description: 'Correo verificado correctamente',
+    type: UserDto,
+  })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
   verifyEmail(@Param('id', ParseObjectIdPipe) id: string) {
     return this.usersService.verifyEmail(id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Soft delete user by ID' })
-  @ApiResponse({ status: 204, description: 'User soft-deleted successfully' })
+  @ApiOperation({ summary: 'Eliminar un usuario de manera lógica por ID' })
+  @ApiResponse({ status: 204, description: 'Usuario eliminado correctamente' })
   async softDelete(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,

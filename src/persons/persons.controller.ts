@@ -43,7 +43,7 @@ export class PersonsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Create a new person' })
+  @ApiOperation({ summary: 'Crea una nueva persona' })
   @ApiResponse({
     status: 201,
     description: 'Persona creada correctamente',

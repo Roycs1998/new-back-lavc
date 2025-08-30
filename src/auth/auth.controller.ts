@@ -28,6 +28,10 @@ import type { CurrentUserData } from 'src/common/decorators/current-user.decorat
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { AuthResponseDto } from './dto/auth-response.dto';
+import { UserDto } from 'src/users/dto/user.dto';
+import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
+import { MessageResponseDto } from './dto/message-response.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -36,53 +40,39 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'User login' })
+  @ApiOperation({
+    summary: 'Inicio de sesión de usuario',
+    description:
+      'Permite a un usuario autenticarse con su correo y contraseña. Retorna un token JWT junto con la información básica del usuario.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Login successful',
-    schema: {
-      type: 'object',
-      properties: {
-        user: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            email: { type: 'string' },
-            role: { type: 'string' },
-            emailVerified: { type: 'boolean' },
-            person: {
-              type: 'object',
-              properties: {
-                firstName: { type: 'string' },
-                lastName: { type: 'string' },
-                phone: { type: 'string' },
-              },
-            },
-          },
-        },
-        access_token: { type: 'string' },
-        expires_in: { type: 'string' },
-      },
-    },
+    description: 'Inicio de sesión exitoso',
+    type: AuthResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() loginDto: LoginDto) {
+  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
+  async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(loginDto);
   }
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'User registration' })
+  @ApiOperation({
+    summary: 'Registro de usuario',
+    description:
+      'Permite registrar un nuevo usuario con sus datos personales. El usuario queda autenticado automáticamente y recibe un token JWT.',
+  })
   @ApiResponse({
     status: 201,
-    description: 'User registered and logged in successfully',
+    description: 'Usuario registrado exitosamente',
+    type: AuthResponseDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Registration failed - validation error',
+    description: 'Error en la validación o en los datos enviados',
   })
-  @ApiResponse({ status: 409, description: 'Email already registered' })
-  async register(@Body() registerDto: RegisterDto) {
+  @ApiResponse({ status: 409, description: 'Correo ya registrado' })
+  async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(registerDto);
   }
 
@@ -91,87 +81,139 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Register company admin (Platform Admin only)' })
+  @ApiOperation({
+    summary: 'Registro de administrador de empresa',
+    description:
+      'Solo un administrador de plataforma puede registrar un nuevo administrador de empresa.',
+  })
   @ApiResponse({
     status: 201,
-    description: 'Company admin registered successfully',
+    description: 'Administrador de empresa registrado correctamente',
+    type: AuthResponseDto,
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - insufficient permissions',
+    description: 'Acceso denegado - permisos insuficientes',
   })
   async registerCompanyAdmin(
     @Body() registerCompanyAdminDto: RegisterCompanyAdminDto,
-  ) {
+  ): Promise<AuthResponseDto> {
     return this.authService.registerCompanyAdmin(registerCompanyAdminDto);
   }
 
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getProfile(@CurrentUser() user: CurrentUserData) {
+  @ApiOperation({
+    summary: 'Obtener perfil del usuario autenticado',
+    description:
+      'Devuelve los datos del usuario actualmente autenticado usando el token JWT.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Perfil obtenido correctamente',
+    type: UserDto,
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  async getProfile(@CurrentUser() user: CurrentUserData): Promise<UserDto> {
     return this.authService.getProfile(user.id);
   }
 
   @Post('refresh')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Refresh JWT token' })
+  @ApiOperation({
+    summary: 'Refrescar token JWT',
+    description:
+      'Genera un nuevo token de acceso (JWT) a partir de un usuario autenticado con sesión activa.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Token refreshed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        access_token: { type: 'string' },
-        expires_in: { type: 'string' },
-      },
-    },
+    description: 'Token refrescado correctamente',
+    type: RefreshTokenResponseDto,
   })
-  async refreshToken(@CurrentUser() user: CurrentUserData) {
+  async refreshToken(
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<RefreshTokenResponseDto> {
     return this.authService.refreshToken(user.id);
   }
 
   @Patch('change-password')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Change user password' })
-  @ApiResponse({ status: 200, description: 'Password changed successfully' })
-  @ApiResponse({ status: 401, description: 'Current password is incorrect' })
+  @ApiOperation({
+    summary: 'Cambiar contraseña',
+    description:
+      'Permite a un usuario autenticado cambiar su contraseña actual por una nueva.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contraseña cambiada correctamente',
+    type: MessageResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'La contraseña actual es incorrecta o usuario no autorizado',
+  })
   async changePassword(
     @CurrentUser() user: CurrentUserData,
     @Body() changePasswordDto: ChangePasswordDto,
-  ) {
+  ): Promise<MessageResponseDto> {
     return this.authService.changePassword(user.id, changePasswordDto);
   }
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset' })
+  @ApiOperation({
+    summary: 'Solicitud de restablecimiento de contraseña',
+    description:
+      'Genera un token para restablecer la contraseña y lo envía al correo del usuario (si existe en el sistema).',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Password reset link sent (if email exists)',
+    description: 'Se generó el enlace de restablecimiento',
+    type: MessageResponseDto,
   })
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+  async forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<MessageResponseDto> {
     return this.authService.forgotPassword(forgotPasswordDto);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password with token' })
-  @ApiResponse({ status: 200, description: 'Password reset successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid or expired reset token' })
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+  @ApiOperation({
+    summary: 'Restablecer contraseña',
+    description:
+      'Permite restablecer la contraseña de un usuario mediante un token válido de recuperación.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contraseña restablecida correctamente',
+    type: MessageResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Token inválido o expirado',
+  })
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ): Promise<MessageResponseDto> {
     return this.authService.resetPassword(resetPasswordDto);
   }
 
   @Get('verify-email')
-  @ApiOperation({ summary: 'Verify email address' })
-  @ApiResponse({ status: 200, description: 'Email verified successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid verification token' })
+  @ApiOperation({
+    summary: 'Verificar correo electrónico',
+    description:
+      'Confirma la dirección de correo de un usuario mediante un token enviado al mismo.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Correo verificado correctamente',
+    type: MessageResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Token de verificación inválido' })
   async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
   }
@@ -181,15 +223,19 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'User logout (client-side only)',
+    summary: 'Cerrar sesión',
     description:
-      'Since JWT is stateless, logout is handled client-side by removing the token',
+      'El logout es manejado en el cliente ya que JWT es **stateless**. Basta con eliminar el token del almacenamiento local.',
   })
-  @ApiResponse({ status: 200, description: 'Logout successful' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cierre de sesión exitoso',
+    type: MessageResponseDto,
+  })
   async logout() {
     return {
       message:
-        'Logout successful. Please remove the token from client storage.',
+        'Cierre de sesión exitoso. Elimine el token del almacenamiento del cliente.',
     };
   }
 }

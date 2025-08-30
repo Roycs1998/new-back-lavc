@@ -105,7 +105,7 @@ export class SpeakersService {
 
     const speaker = await this.create(
       {
-        personId: person._id.toString(),
+        personId: person.id,
         companyId: dto.companyId,
         specialty: dto.specialty,
         biography: dto.biography,

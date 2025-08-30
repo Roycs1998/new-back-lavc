@@ -13,7 +13,6 @@ import { User, UserDocument } from './entities/user.entity';
 import { Model, SortOrder, Types } from 'mongoose';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
-import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { PersonsService } from 'src/persons/persons.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
@@ -21,6 +20,9 @@ import { UserFilterDto } from './dto/user-filter.dto';
 import { asDate } from 'src/utils/asDate';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { sanitizeFlat } from 'src/utils/sanitizeFlat';
+import { UserDto } from './dto/user.dto';
+import { plainToInstance } from 'class-transformer';
+import { UserPaginatedDto } from './dto/user-pagination.dto';
 
 @Injectable()
 export class UsersService {
@@ -30,80 +32,78 @@ export class UsersService {
     private personsService: PersonsService,
   ) {}
 
-  async create(dto: CreateUserDto): Promise<UserDocument> {
+  private toDto(doc: UserDocument): UserDto {
+    return plainToInstance(UserDto, doc.toJSON(), {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  async create(dto: CreateUserDto): Promise<UserDto> {
     if (dto.role === UserRole.COMPANY_ADMIN && !dto.companyId) {
       throw new BadRequestException(
-        'Company ID is required for company admin role',
+        'Se requiere el ID de la empresa para el rol de administrador de la empresa.',
       );
     }
     if (dto.role !== UserRole.COMPANY_ADMIN && dto.companyId) {
       throw new BadRequestException(
-        'Company ID should only be provided for company admin role',
+        'El ID de la empresa solo debe proporcionarse para el rol de administrador de la empresa.',
       );
     }
 
-    try {
-      const email = dto.email.trim().toLowerCase();
-      const exists = await this.userModel.exists({
-        email,
-        entityStatus: { $ne: EntityStatus.DELETED },
-      });
-      if (exists) throw new ConflictException('Email already exists');
+    const email = dto.email.trim().toLowerCase();
 
-      const password = await bcrypt.hash(dto.password, 12);
-      const user = new this.userModel({
-        ...dto,
-        email,
-        password,
-        personId: new Types.ObjectId(dto.personId),
-        companyId: dto.companyId
-          ? new Types.ObjectId(dto.companyId)
-          : undefined,
-        entityStatus: EntityStatus.ACTIVE,
-      });
-      return await user.save();
-    } catch (error: any) {
-      if (error?.code === 11000) {
-        throw new BadRequestException('Email already exists');
-      }
-      throw error;
-    }
+    const exists = await this.userModel.exists({
+      email,
+      entityStatus: { $ne: EntityStatus.DELETED },
+    });
+
+    if (exists) throw new ConflictException('El email ya está registrado');
+
+    const password = await bcrypt.hash(dto.password, 12);
+
+    const user = new this.userModel({
+      ...dto,
+      email,
+      password,
+      personId: new Types.ObjectId(dto.personId),
+      companyId: dto.companyId ? new Types.ObjectId(dto.companyId) : undefined,
+      entityStatus: EntityStatus.ACTIVE,
+    });
+
+    return this.toDto(await user.save());
   }
 
-  async createUserWithPerson(
-    dto: CreateUserWithPersonDto,
-  ): Promise<{ user: UserDocument; person: any }> {
+  async createUserWithPerson(dto: CreateUserWithPersonDto): Promise<UserDto> {
     const email = dto.email.trim().toLowerCase();
+
     const existingUser = await this.userModel.findOne({
       email,
       entityStatus: { $ne: EntityStatus.DELETED },
     });
-    if (existingUser) throw new BadRequestException('Email already exists');
+
+    if (existingUser)
+      throw new ConflictException('El email ya está registrado');
 
     const person = await this.personsService.createForUser(dto);
+
     const user = await this.create({
-      personId: person._id.toString(),
-      email,
-      password: dto.password,
-      role: dto.role,
-      companyId: dto.companyId,
+      ...dto,
+      personId: person.id,
     });
 
     const populatedUser = await this.userModel
-      .findById(user._id)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
+      .findById(user.id)
+      .populate('personId')
+      .populate('companyId')
       .exec();
 
     if (!populatedUser)
-      throw new NotFoundException('User not found after creation');
+      throw new NotFoundException(`Usuario con ID ${user.id} no encontrado`);
 
-    return { user: populatedUser, person };
+    return this.toDto(populatedUser);
   }
 
-  async findAll(
-    filterDto: UserFilterDto,
-  ): Promise<PaginationMetaDto<UserDocument>> {
+  async findAll(filterDto: UserFilterDto): Promise<UserPaginatedDto> {
     const {
       page = 1,
       limit = 10,
@@ -171,6 +171,7 @@ export class UsersService {
       'person.lastName',
       'company.name',
     ] as const);
+
     const sortKey = SORT_WHITELIST.has(sort as any) ? sort : 'createdAt';
     const sortOptions: Record<string, SortOrder> = {
       [sortKey]: order === 'asc' ? 1 : -1,
@@ -213,7 +214,7 @@ export class UsersService {
     const totalPages = totalItems ? Math.ceil(totalItems / safeLimit) : 1;
 
     return {
-      data,
+      data: data.map((doc) => this.toDto(doc)),
       totalItems,
       totalPages,
       currentPage: safePage,
@@ -222,121 +223,71 @@ export class UsersService {
     };
   }
 
-  async findOne(id: string, includeDeleted = false): Promise<UserDocument> {
+  async findOne(id: string, includeDeleted = false): Promise<UserDto> {
     const filter: any = { _id: id };
     if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     const user = await this.userModel
       .findOne(filter)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
+      .populate('personId')
+      .populate('companyId')
       .exec();
 
-    if (!user) throw new NotFoundException(`User with ID ${id} not found`);
-    return user;
-  }
-
-  async findByEmail(
-    email: string,
-    includeDeleted = false,
-  ): Promise<UserDocument | null> {
-    const filter: any = { email: email.trim().toLowerCase() };
-    if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
-
-    return this.userModel
-      .findOne(filter)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
-      .exec();
-  }
-
-  async findByEmailForAuth(email: string): Promise<UserDocument | null> {
-    return this.userModel
-      .findOne({
-        email: email.trim().toLowerCase(),
-        entityStatus: { $ne: EntityStatus.DELETED },
-      })
-      .select('+password')
-      .exec();
-  }
-
-  async findByPersonId(
-    personId: string,
-    includeDeleted = false,
-  ): Promise<UserDocument | null> {
-    const filter: any = { personId: new Types.ObjectId(personId) };
-    if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
-
-    return this.userModel
-      .findOne(filter)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
-      .exec();
+    if (!user)
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    return this.toDto(user);
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserDocument> {
     if (dto.role === UserRole.COMPANY_ADMIN && !dto.companyId) {
       throw new BadRequestException(
-        'Company ID is required for company admin role',
+        'Se requiere el ID de la empresa para el rol de administrador de la empresa.',
       );
     }
     if (dto.role !== UserRole.COMPANY_ADMIN && dto.companyId) {
       throw new BadRequestException(
-        'Company ID should only be provided for company admin role',
+        'El ID de la empresa solo debe proporcionarse para el rol de administrador de la empresa.',
       );
     }
 
-    try {
-      if (dto.email) dto.email = dto.email.trim().toLowerCase();
+    if (dto.email) dto.email = dto.email.trim().toLowerCase();
 
-      const existing = await this.userModel
-        .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
-        .lean();
-      if (!existing) throw new NotFoundException('User not found');
+    const existing = await this.userModel
+      .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
+      .lean();
 
-      if (dto.email && dto.email !== existing.email) {
-        const dup = await this.userModel.exists({
-          _id: { $ne: id },
-          email: dto.email,
-          entityStatus: { $ne: EntityStatus.DELETED },
-        });
-        if (dup) throw new ConflictException('Email already exists');
-      }
+    if (!existing) throw new NotFoundException('Usuario no encontrado');
 
-      const $set = sanitizeFlat({
-        ...dto,
-        companyId: dto.companyId
-          ? new Types.ObjectId(dto.companyId)
-          : undefined,
+    if (dto.email && dto.email !== existing.email) {
+      const dup = await this.userModel.exists({
+        _id: { $ne: id },
+        email: dto.email,
+        entityStatus: { $ne: EntityStatus.DELETED },
       });
-
-      if (Object.keys($set).length === 0) {
-        const doc = await this.userModel.findById(id).exec();
-        if (!doc) throw new NotFoundException('User not found');
-        return doc;
-      }
-
-      const updated = await this.userModel
-        .findOneAndUpdate(
-          { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
-          { $set, $currentDate: { updatedAt: true } },
-          { new: true, runValidators: true, context: 'query' },
-        )
-        .populate('personId', 'firstName lastName email phone')
-        .populate('companyId', 'name contactEmail')
-        .exec();
-
-      if (!updated) throw new NotFoundException('User not found');
-      return updated;
-    } catch (error: any) {
-      if (error?.code === 11000) {
-        throw new BadRequestException('Email already exists');
-      }
-      throw error;
+      if (dup) throw new ConflictException('El email ya está registrado');
     }
+
+    const $set = sanitizeFlat({
+      ...dto,
+      companyId: dto.companyId ? new Types.ObjectId(dto.companyId) : undefined,
+    });
+
+    const updated = await this.userModel
+      .findOneAndUpdate(
+        { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
+        { $set, $currentDate: { updatedAt: true } },
+        { new: true, runValidators: true, context: 'query' },
+      )
+      .populate('personId')
+      .populate('companyId')
+      .exec();
+
+    if (!updated) throw new NotFoundException('Usuario no encontrado');
+
+    return updated;
   }
 
-  async updatePassword(id: string, newPassword: string): Promise<UserDocument> {
+  async updatePassword(id: string, newPassword: string): Promise<UserDto> {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     const user = await this.userModel
@@ -348,12 +299,12 @@ export class UsersService {
         },
         { new: true },
       )
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
+      .populate('personId')
+      .populate('companyId')
       .exec();
 
-    if (!user) throw new NotFoundException('User not found');
-    return user;
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return this.toDto(user);
   }
 
   async updateLastLogin(id: string): Promise<void> {
@@ -365,7 +316,7 @@ export class UsersService {
       .exec();
   }
 
-  async verifyEmail(id: string): Promise<UserDocument> {
+  async verifyEmail(id: string): Promise<UserDto> {
     const user = await this.userModel
       .findOneAndUpdate(
         { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
@@ -376,19 +327,19 @@ export class UsersService {
         },
         { new: true },
       )
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
+      .populate('personId')
+      .populate('companyId')
       .exec();
 
-    if (!user) throw new NotFoundException('User not found');
-    return user;
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return this.toDto(user);
   }
 
   async changeStatus(
     id: string,
     entityStatus: EntityStatus,
     changedBy?: string,
-  ): Promise<UserDocument> {
+  ): Promise<UserDto> {
     const update: any = {
       $set: { entityStatus },
       $currentDate: { updatedAt: true },
@@ -407,37 +358,54 @@ export class UsersService {
         runValidators: true,
         context: 'query',
       })
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
+      .populate('personId')
+      .populate('companyId')
       .exec();
 
-    if (!doc) throw new NotFoundException('User not found');
-    return doc;
+    if (!doc) throw new NotFoundException('Usuario no encontrado');
+
+    return this.toDto(doc);
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<UserDocument> {
+  async softDelete(id: string, deletedBy?: string): Promise<UserDto> {
     return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
   }
 
-  async validatePassword(
-    user: UserDocument,
-    password: string,
-  ): Promise<boolean> {
-    if (!user.password) {
-      const withHash = await this.userModel
-        .findById(user._id)
-        .select('+password')
-        .exec();
-      if (!withHash?.password)
-        throw new BadRequestException('Password hash not available');
-      return bcrypt.compare(password, withHash.password);
+  async findByEmail(
+    email: string,
+    includeDeleted = false,
+  ): Promise<UserDto | null> {
+    const filter: any = { email: email.trim().toLowerCase() };
+    if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
+
+    const user = await this.userModel
+      .findOne(filter)
+      .populate('personId')
+      .populate('companyId')
+      .exec();
+
+    if (!user) {
+      return null;
     }
-    return bcrypt.compare(password, user.password);
+
+    return this.toDto(user);
+  }
+
+  async validatePassword(userId: string, password: string): Promise<boolean> {
+    const withHash = await this.userModel
+      .findById(new Types.ObjectId(userId))
+      .select('+password')
+      .exec();
+
+    if (!withHash?.password)
+      throw new BadRequestException('Hash de contraseña no disponible');
+
+    return bcrypt.compare(password, withHash.password);
   }
 
   async findUserByVerificationToken(token: string): Promise<string> {
     if (!token || !token.trim()) {
-      throw new BadRequestException('Verification token is required');
+      throw new BadRequestException('Se requiere un token de verificación.');
     }
 
     const user = await this.userModel
@@ -450,7 +418,7 @@ export class UsersService {
       .lean();
 
     if (!user) {
-      throw new NotFoundException('Invalid or expired verification token');
+      throw new NotFoundException('Token de verificación no válido o caducado');
     }
 
     return String(user._id);
@@ -458,7 +426,9 @@ export class UsersService {
 
   async findUserByResetToken(token: string): Promise<string> {
     if (!token || !token.trim()) {
-      throw new BadRequestException('Reset token is required');
+      throw new BadRequestException(
+        'Se requiere un token de restablecimiento.',
+      );
     }
 
     const tokenTrim = token.trim();
@@ -475,9 +445,31 @@ export class UsersService {
       .lean();
 
     if (!user) {
-      throw new NotFoundException('Invalid or expired reset token');
+      throw new NotFoundException(
+        'Token de restablecimiento no válido o caducado',
+      );
     }
 
     return String(user._id);
+  }
+
+  async findUserWithSensitiveFields(id: string): Promise<UserDocument | null> {
+    return this.userModel
+      .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
+      .exec();
+  }
+
+  async findUserByEmailWithSensitiveFields(
+    email: string,
+  ): Promise<UserDocument | null> {
+    return this.userModel
+      .findOne({
+        email: email.trim().toLowerCase(),
+        entityStatus: { $ne: EntityStatus.DELETED },
+      })
+      .select('+password')
+      .populate('personId')
+      .populate('companyId')
+      .exec();
   }
 }
