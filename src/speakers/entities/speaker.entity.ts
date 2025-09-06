@@ -1,17 +1,30 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { Currency } from 'src/common/enums/currency.enum';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
 export type SpeakerDocument = Speaker & Document & { _id: Types.ObjectId };
 
-export type UploadSource = 'manual' | 'excel' | 'csv' | 'bulk_import';
+export enum UploadSource {
+  MANUAL = 'manual',
+  EXCEL = 'excel',
+  CSV = 'csv',
+  BULK_IMPORT = 'bulk_import',
+}
 
 @Schema({ _id: false })
 class SocialMedia {
-  @Prop({ type: String, trim: true, match: /^https?:\/\// }) linkedin?: string;
-  @Prop({ type: String, trim: true, match: /^https?:\/\// }) twitter?: string;
-  @Prop({ type: String, trim: true, match: /^https?:\/\// }) website?: string;
-  @Prop({ type: String, trim: true, match: /^https?:\/\// }) github?: string;
+  @Prop({ type: String, trim: true, match: /^https?:\/\// })
+  linkedin?: string;
+
+  @Prop({ type: String, trim: true, match: /^https?:\/\// })
+  twitter?: string;
+
+  @Prop({ type: String, trim: true, match: /^https?:\/\// })
+  website?: string;
+
+  @Prop({ type: String, trim: true, match: /^https?:\/\// })
+  github?: string;
 }
 const SocialMediaSchema = SchemaFactory.createForClass(SocialMedia);
 
@@ -26,9 +39,7 @@ AudienceSizeSchema.pre('validate', function (next) {
   const self = this as any as AudienceSize;
   if (self.min != null && self.max != null && self.min > self.max) {
     return next(
-      new Error(
-        'audienceSize.min must be less than or equal to audienceSize.max',
-      ),
+      new Error('audienceSize.min debe ser menor o igual que audienceSize.max'),
     );
   }
   next();
@@ -37,7 +48,9 @@ AudienceSizeSchema.pre('validate', function (next) {
 @Schema({
   collection: 'speakers',
   versionKey: false,
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
+  timestamps: true,
 })
 export class Speaker {
   @Prop({ type: Types.ObjectId, ref: 'Person', required: true })
@@ -68,7 +81,7 @@ export class Speaker {
   @Prop({ min: 0, max: 10000 })
   hourlyRate?: number;
 
-  @Prop({ type: String, enum: ['USD', 'PEN', 'EUR'], default: 'PEN' })
+  @Prop({ type: String, enum: Currency, default: Currency.PEN })
   currency?: string;
 
   @Prop({
@@ -78,16 +91,10 @@ export class Speaker {
 
   @Prop({
     type: String,
-    enum: ['manual', 'excel', 'csv', 'bulk_import'],
-    default: 'manual',
+    enum: UploadSource,
+    default: UploadSource.MANUAL,
   })
   uploadedVia: UploadSource;
-
-  @Prop({ default: false })
-  canEdit: boolean;
-
-  @Prop([{ type: Types.ObjectId, ref: 'User' }])
-  editableBy: Types.ObjectId[];
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
@@ -138,6 +145,20 @@ export class Speaker {
 }
 
 export const SpeakerSchema = SchemaFactory.createForClass(Speaker);
+
+SpeakerSchema.virtual('person', {
+  ref: 'Person',
+  localField: 'personId',
+  foreignField: '_id',
+  justOne: true,
+});
+
+SpeakerSchema.virtual('company', {
+  ref: 'Company',
+  localField: 'companyId',
+  foreignField: '_id',
+  justOne: true,
+});
 
 SpeakerSchema.index({ personId: 1 });
 SpeakerSchema.index({ companyId: 1, entityStatus: 1 });

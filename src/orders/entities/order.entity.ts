@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { OrderStatus } from '../../common/enums/order-status.enum';
 import { EntityStatus } from '../../common/enums/entity-status.enum';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 import { DocumentType } from 'src/common/enums/document-type.enum';
 
 export type OrderDocument = Order & Document;
@@ -24,8 +24,8 @@ export class OrderItem {
   @Prop({ type: Number, required: true, min: 0 })
   totalPrice!: number;
 
-  @Prop({ type: String, enum: Object.values(CurrencyCode), default: 'PEN' })
-  currency!: CurrencyCode;
+  @Prop({ type: String, enum: Object.values(Currency), default: 'PEN' })
+  currency!: Currency;
 }
 export const OrderItemSchema = SchemaFactory.createForClass(OrderItem);
 Object.assign(OrderItemSchema.options as any, { skipSoftDeletePlugin: true });
@@ -112,8 +112,8 @@ export class Order {
   @Prop({ required: true, min: 0 })
   total: number;
 
-  @Prop({ type: String, enum: CurrencyCode, default: CurrencyCode.PEN })
-  currency: CurrencyCode;
+  @Prop({ type: String, enum: Currency, default: Currency.PEN })
+  currency: Currency;
 
   @Prop({
     type: String,

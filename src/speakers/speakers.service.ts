@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
@@ -8,61 +7,29 @@ import {
 } from '@nestjs/common';
 import { CreateSpeakerDto } from './dto/create-speaker.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { Speaker, SpeakerDocument } from './entities/speaker.entity';
-import { Model, PipelineStage } from 'mongoose';
+import {
+  Speaker,
+  SpeakerDocument,
+  UploadSource,
+} from './entities/speaker.entity';
+import {
+  FilterQuery,
+  Model,
+  ProjectionType,
+  QueryOptions,
+  Types,
+} from 'mongoose';
 import { PersonsService } from 'src/persons/persons.service';
 import { CompaniesService } from 'src/companies/companies.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateSpeakerWithPersonDto } from 'src/persons/dto/create-speaker-with-person.dto';
 import { SpeakerFilterDto } from './dto/speaker-filter.dto';
-import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
-import { UserRole } from 'src/common/enums/user-role.enum';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
-import { PersonDocument } from 'src/persons/entities/person.entity';
-import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 import { toObjectId } from 'src/utils/toObjectId';
 import { sanitizeDefined } from 'src/utils/sanitizeDefined';
-import { PersonDto } from 'src/persons/dto/person.dto';
-
-export interface CompanySpeakerStats {
-  totalSpeakers: number;
-  activeSpeakers: number;
-  availableSpeakers: number;
-  avgExperience: number;
-  avgHourlyRate: number;
-  uploadMethods: string[];
-  topSpecialties: { specialty: string; count: number }[];
-}
-
-const aggregationLookups: PipelineStage[] = [
-  {
-    $lookup: {
-      from: 'persons',
-      localField: 'personId',
-      foreignField: '_id',
-      as: 'person',
-    },
-  },
-  { $unwind: '$person' },
-  {
-    $lookup: {
-      from: 'companies',
-      localField: 'companyId',
-      foreignField: '_id',
-      as: 'company',
-    },
-  },
-  { $unwind: '$company' },
-  {
-    $lookup: {
-      from: 'users',
-      localField: 'createdBy',
-      foreignField: '_id',
-      as: 'creator',
-    },
-  },
-  { $addFields: { creator: { $arrayElemAt: ['$creator', 0] } } },
-];
+import { SpeakerDto } from './dto/speaker.dto';
+import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
+import { toDto } from 'src/utils/toDto';
 
 @Injectable()
 export class SpeakersService {
@@ -74,15 +41,16 @@ export class SpeakersService {
     private companiesService: CompaniesService,
   ) {}
 
-  async create(
-    dto: CreateSpeakerDto,
-    createdBy?: string,
-  ): Promise<SpeakerDocument> {
+  private escapeRegex(input: string): string {
+    return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  async create(dto: CreateSpeakerDto, createdBy?: string): Promise<SpeakerDto> {
     const company = await this.companiesService.findOne(dto.companyId);
     if (company.entityStatus !== EntityStatus.ACTIVE)
-      throw new BadRequestException('Company is not active');
+      throw new BadRequestException('La empresa no está activa.');
 
-    const doc = new this.speakerModel({
+    const doc = await this.speakerModel.create({
       ...dto,
       personId: toObjectId(dto.personId),
       companyId: toObjectId(dto.companyId),
@@ -90,16 +58,16 @@ export class SpeakersService {
       createdBy: createdBy ? toObjectId(createdBy) : undefined,
     });
 
-    return doc.save();
+    return toDto(doc, SpeakerDto);
   }
 
   async createSpeakerWithPerson(
     dto: CreateSpeakerWithPersonDto,
     createdBy?: string,
-  ): Promise<{ speaker: SpeakerDocument; person: PersonDto }> {
+  ): Promise<SpeakerDto> {
     const company = await this.companiesService.findOne(dto.companyId);
     if (company.entityStatus !== EntityStatus.ACTIVE)
-      throw new BadRequestException('Company is not active');
+      throw new BadRequestException('La empresa no está activa.');
 
     const person = await this.personsService.createForSpeaker(dto);
 
@@ -112,130 +80,131 @@ export class SpeakersService {
         yearsExperience: dto.yearsExperience,
         certifications: dto.certifications,
         hourlyRate: dto.hourlyRate,
-        currency: dto.currency ?? 'PEN',
+        currency: dto.currency,
         socialMedia: dto.socialMedia,
         languages: dto.languages,
         topics: dto.topics,
         audienceSize: dto.audienceSize,
         notes: dto.notes,
-        uploadedVia: 'manual',
+        uploadedVia: UploadSource.MANUAL,
       },
       createdBy,
     );
 
     const populated = await this.speakerModel
-      .findById(speaker._id)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail status')
-      .populate('createdBy', 'email role')
-      .populate('updatedBy', 'email role')
-      .populate('editableBy', 'email role')
+      .findById(speaker.id)
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!populated)
-      throw new NotFoundException('Speaker not found after creation');
+      throw new NotFoundException(
+        'Orador no encontrado después de la creación',
+      );
 
-    return { speaker: populated, person };
+    return toDto(populated, SpeakerDto);
   }
 
-  async findAll(
-    filter: SpeakerFilterDto,
-    requestingUser?: CurrentUserData,
-  ): Promise<PaginationMetaDto<any>> {
+  async findAll(filter: SpeakerFilterDto): Promise<SpeakerPaginatedDto> {
     const {
       page = 1,
       limit = 10,
       sort = 'createdAt',
       order = 'desc',
-      entityStatus,
+      search,
       companyId,
       specialty,
-      minExperience,
-      maxExperience,
-      language,
-      topic,
-      currency,
+      languages,
+      topics,
+      minYears,
+      maxYears,
       minRate,
       maxRate,
+      currency,
       uploadedVia,
-      search,
+      entityStatus,
       createdFrom,
       createdTo,
+      includeDeleted,
     } = filter;
 
-    const skip = (page - 1) * limit;
+    const q: FilterQuery<Speaker> = {};
 
-    const match: Record<string, any> = {
-      entityStatus: entityStatus || EntityStatus.ACTIVE,
-    };
+    if (entityStatus) q.entityStatus = entityStatus;
+    else q.entityStatus = { $ne: EntityStatus.DELETED };
 
-    if (
-      requestingUser?.role === UserRole.COMPANY_ADMIN &&
-      requestingUser.companyId
-    ) {
-      match.companyId = toObjectId(requestingUser.companyId);
-    } else if (companyId) {
-      match.companyId = toObjectId(companyId);
+    if (!includeDeleted) {
+      q.$or = [{ deletedAt: { $exists: false } }, { deletedAt: null }];
     }
 
-    if (specialty) match.specialty = { $regex: specialty, $options: 'i' };
+    if (companyId) q.companyId = toObjectId(companyId);
 
-    if (minExperience !== undefined || maxExperience !== undefined) {
-      match.yearsExperience = {};
-      if (minExperience !== undefined)
-        match.yearsExperience.$gte = minExperience;
-      if (maxExperience !== undefined)
-        match.yearsExperience.$lte = maxExperience;
+    if (search && search.trim()) {
+      q.$text = { $search: search.trim() };
     }
 
-    if (minRate !== undefined || maxRate !== undefined) {
-      match.hourlyRate = {};
-      if (minRate !== undefined) match.hourlyRate.$gte = minRate;
-      if (maxRate !== undefined) match.hourlyRate.$lte = maxRate;
+    if (specialty && specialty.trim()) {
+      q.specialty = new RegExp(`^${this.escapeRegex(specialty.trim())}$`, 'i');
     }
 
-    if (currency) match.currency = currency;
-    if (uploadedVia) match.uploadedVia = uploadedVia;
-    if (language) match.languages = { $regex: language, $options: 'i' };
-    if (topic) match.topics = { $regex: topic, $options: 'i' };
+    if (Array.isArray(languages) && languages.length) {
+      q.languages = { $in: languages.map((l) => l.trim().toLowerCase()) };
+    }
+    if (Array.isArray(topics) && topics.length) {
+      q.topics = { $in: topics.map((t) => t.trim().toLowerCase()) };
+    }
+
+    if (minYears != null || maxYears != null) {
+      q.yearsExperience = {};
+      if (minYears != null) (q.yearsExperience as any).$gte = Number(minYears);
+      if (maxYears != null) (q.yearsExperience as any).$lte = Number(maxYears);
+    }
+    if (minRate != null || maxRate != null) {
+      q.hourlyRate = {};
+      if (minRate != null) (q.hourlyRate as any).$gte = Number(minRate);
+      if (maxRate != null) (q.hourlyRate as any).$lte = Number(maxRate);
+    }
+
+    if (currency) q.currency = currency;
+    if (uploadedVia) q.uploadedVia = uploadedVia;
 
     if (createdFrom || createdTo) {
-      match.createdAt = {};
-      if (createdFrom) match.createdAt.$gte = new Date(createdFrom);
-      if (createdTo) match.createdAt.$lte = new Date(createdTo);
+      q.createdAt = {};
+      if (createdFrom) (q.createdAt as any).$gte = new Date(createdFrom);
+      if (createdTo) (q.createdAt as any).$lte = new Date(createdTo);
     }
 
-    if (search) {
-      match.$or = [
-        { 'person.firstName': { $regex: search, $options: 'i' } },
-        { 'person.lastName': { $regex: search, $options: 'i' } },
-        { 'person.email': { $regex: search, $options: 'i' } },
-        { specialty: { $regex: search, $options: 'i' } },
-        { biography: { $regex: search, $options: 'i' } },
-        { topics: { $elemMatch: { $regex: search, $options: 'i' } } },
-        { languages: { $elemMatch: { $regex: search, $options: 'i' } } },
-      ];
-    }
+    const sortObj: Record<string, 1 | -1> = {};
 
-    const sortStage: PipelineStage.Sort = {
-      $sort: { [sort || 'createdAt']: order === 'asc' ? 1 : -1 },
-    };
+    const dir: 1 | -1 = order === 'asc' ? 1 : -1;
+    if (sort === 'specialty') sortObj['specialty'] = dir;
+    else if (sort === 'yearsExperience') sortObj['yearsExperience'] = dir;
+    else if (sort === 'hourlyRate') sortObj['hourlyRate'] = dir;
+    else if (sort === 'updatedAt') sortObj['updatedAt'] = dir;
+    else sortObj['createdAt'] = dir;
 
-    const pipeline: PipelineStage[] = [
-      ...aggregationLookups,
-      { $match: match },
-      sortStage,
-    ];
+    const projection: ProjectionType<Speaker> = {};
 
-    const [data, totalAgg] = await Promise.all([
-      this.speakerModel
-        .aggregate([...pipeline, { $skip: skip }, { $limit: limit }])
-        .exec(),
-      this.speakerModel.aggregate([...pipeline, { $count: 'total' }]).exec(),
+    const mongoQuery = this.speakerModel
+      .find(q, projection, {
+        collation: { locale: 'es', strength: 2 },
+      } as QueryOptions)
+      .populate({
+        path: 'person',
+      })
+      .populate({
+        path: 'company',
+      })
+      .sort(sortObj)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    const [items, totalItems] = await Promise.all([
+      mongoQuery.exec(),
+      this.speakerModel.countDocuments(q).exec(),
     ]);
 
-    const totalItems = totalAgg[0]?.total ?? 0;
-    const totalPages = Math.ceil(totalItems / limit);
+    const data: SpeakerDto[] = items.map((d) => toDto(d, SpeakerDto));
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return {
       data,
@@ -247,11 +216,7 @@ export class SpeakersService {
     };
   }
 
-  async findOne(
-    id: string,
-    includeDeleted = false,
-    requestingUser?: any,
-  ): Promise<Speaker> {
+  async findOne(id: string, includeDeleted = false): Promise<SpeakerDto> {
     const filter: any = { _id: id };
     if (!includeDeleted) {
       filter.entityStatus = { $ne: EntityStatus.DELETED };
@@ -259,64 +224,21 @@ export class SpeakersService {
 
     const speaker = await this.speakerModel
       .findOne(filter)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail status')
-      .populate('createdBy', 'email role')
-      .populate('updatedBy', 'email role')
-      .populate('editableBy', 'email role')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!speaker) {
-      throw new NotFoundException(`Speaker with ID ${id} not found`);
+      throw new NotFoundException(`No se encontró el orador con ID ${id}`);
     }
 
-    if (
-      requestingUser?.role === UserRole.COMPANY_ADMIN &&
-      requestingUser?.companyId
-    ) {
-      if (speaker.companyId._id.toString() !== requestingUser.companyId) {
-        throw new ForbiddenException(
-          'Access denied. Speaker belongs to different company.',
-        );
-      }
-    }
-
-    return speaker;
-  }
-
-  async findByCompany(
-    companyId: string,
-    includeInactive = false,
-    requestingUser?: any,
-  ): Promise<SpeakerDocument[]> {
-    if (
-      requestingUser?.role === UserRole.COMPANY_ADMIN &&
-      requestingUser.companyId
-    ) {
-      if (companyId !== requestingUser.companyId) {
-        throw new ForbiddenException('Access denied. Your company only.');
-      }
-    }
-
-    const filter: Record<string, any> = { companyId: toObjectId(companyId) };
-    filter.entityStatus = includeInactive
-      ? { $ne: EntityStatus.DELETED }
-      : EntityStatus.ACTIVE;
-
-    return this.speakerModel
-      .find(filter)
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
-      .populate('createdBy', 'email role')
-      .sort({ createdAt: -1 })
-      .exec();
+    return toDto(speaker, SpeakerDto);
   }
 
   async update(
     id: string,
     dto: UpdateSpeakerDto,
     updatedBy?: string,
-  ): Promise<SpeakerDocument> {
+  ): Promise<SpeakerDto> {
     try {
       const $set = sanitizeDefined({
         ...dto,
@@ -330,16 +252,13 @@ export class SpeakersService {
           { $set, $currentDate: { updatedAt: true } },
           { new: true, runValidators: true, context: 'query' },
         )
-        .populate('personId', 'firstName lastName email phone')
-        .populate('companyId', 'name contactEmail')
-        .populate('createdBy', 'email role')
-        .populate('updatedBy', 'email role')
+        .populate([{ path: 'person' }, { path: 'company' }])
         .exec();
 
       if (!updated)
-        throw new NotFoundException(`Speaker with ID ${id} not found`);
+        throw new NotFoundException(`No se encontró el orador con ID ${id}`);
 
-      return updated;
+      return toDto(updated, SpeakerDto);
     } catch (error) {
       throw error;
     }
@@ -349,164 +268,34 @@ export class SpeakersService {
     id: string,
     entityStatus: EntityStatus,
     changedBy?: string,
-  ): Promise<SpeakerDocument> {
-    const $set: Record<string, any> = {
-      entityStatus,
-      updatedBy: changedBy ? toObjectId(changedBy) : undefined,
+  ): Promise<SpeakerDto> {
+    const update: any = {
+      $set: { entityStatus },
+      $currentDate: { updatedAt: true },
     };
 
     if (entityStatus === EntityStatus.DELETED) {
-      $set.deletedAt = new Date();
-      if (changedBy) $set.deletedBy = toObjectId(changedBy);
+      update.$currentDate.deletedAt = true;
+      if (changedBy) update.$set.deletedBy = new Types.ObjectId(changedBy);
     } else {
-      $set.deletedAt = undefined;
-      $set.deletedBy = undefined;
+      update.$unset = { deletedAt: '', deletedBy: '' };
     }
 
     const doc = await this.speakerModel
-      .findOneAndUpdate(
-        { _id: id },
-        { $set, $currentDate: { updatedAt: true } },
-        { new: true },
-      )
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
-      .populate('createdBy', 'email role')
-      .populate('updatedBy', 'email role')
+      .findOneAndUpdate({ _id: id }, update, {
+        new: true,
+        runValidators: true,
+        context: 'query',
+      })
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
-    if (!doc) throw new NotFoundException(`Speaker with ID ${id} not found`);
-    return doc;
+    if (!doc)
+      throw new NotFoundException(`No se encontró el orador con ID ${id}`);
+    return toDto(doc, SpeakerDto);
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<SpeakerDocument> {
+  async softDelete(id: string, deletedBy?: string): Promise<SpeakerDto> {
     return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
-  }
-
-  async addEditableUser(
-    speakerId: string,
-    userId: string,
-    requestedBy?: string,
-  ): Promise<SpeakerDocument> {
-    const update = sanitizeDefined({
-      $addToSet: { editableBy: toObjectId(userId) },
-      updatedBy: requestedBy ? toObjectId(requestedBy) : undefined,
-    });
-
-    const doc = await this.speakerModel
-      .findByIdAndUpdate(
-        speakerId,
-        { ...update, $currentDate: { updatedAt: true } },
-        { new: true },
-      )
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
-      .populate('editableBy', 'email role')
-      .exec();
-
-    if (!doc)
-      throw new NotFoundException(`Speaker with ID ${speakerId} not found`);
-    return doc;
-  }
-
-  async removeEditableUser(
-    speakerId: string,
-    userId: string,
-    requestedBy?: string,
-  ): Promise<SpeakerDocument> {
-    const update: Record<string, any> = {
-      $pull: { editableBy: toObjectId(userId) },
-      $currentDate: { updatedAt: true },
-    };
-    if (requestedBy) update.$set = { updatedBy: toObjectId(requestedBy) };
-
-    const doc = await this.speakerModel
-      .findByIdAndUpdate(speakerId, update, { new: true })
-      .populate('personId', 'firstName lastName email phone')
-      .populate('companyId', 'name contactEmail')
-      .populate('editableBy', 'email role')
-      .exec();
-
-    if (!doc)
-      throw new NotFoundException(`Speaker with ID ${speakerId} not found`);
-    return doc;
-  }
-
-  async getCompanyStats(companyId: string): Promise<CompanySpeakerStats> {
-    const companyObjId = toObjectId(companyId);
-
-    const [stats] = await this.speakerModel
-      .aggregate([
-        {
-          $match: {
-            companyId: companyObjId,
-            entityStatus: { $ne: EntityStatus.DELETED },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalSpeakers: { $sum: 1 },
-            activeSpeakers: {
-              $sum: {
-                $cond: [{ $eq: ['$entityStatus', EntityStatus.ACTIVE] }, 1, 0],
-              },
-            },
-            availableSpeakers: {
-              $sum: {
-                $cond: [
-                  {
-                    $and: [
-                      { $eq: ['$entityStatus', EntityStatus.ACTIVE] },
-                      { $eq: ['$isAvailable', true] },
-                    ],
-                  },
-                  1,
-                  0,
-                ],
-              },
-            },
-            avgExperience: { $avg: '$yearsExperience' },
-            avgHourlyRate: { $avg: '$hourlyRate' },
-            uploadMethods: { $push: '$uploadedVia' },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            totalSpeakers: 1,
-            activeSpeakers: 1,
-            availableSpeakers: 1,
-            avgExperience: { $round: ['$avgExperience', 1] },
-            avgHourlyRate: { $round: ['$avgHourlyRate', 2] },
-            uploadMethods: 1,
-          },
-        },
-      ])
-      .exec();
-
-    const top = await this.speakerModel
-      .aggregate([
-        {
-          $match: {
-            companyId: companyObjId,
-            entityStatus: EntityStatus.ACTIVE,
-          },
-        },
-        { $group: { _id: '$specialty', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 5 },
-      ])
-      .exec();
-
-    return {
-      totalSpeakers: stats?.totalSpeakers ?? 0,
-      activeSpeakers: stats?.activeSpeakers ?? 0,
-      availableSpeakers: stats?.availableSpeakers ?? 0,
-      avgExperience: stats?.avgExperience ?? 0,
-      avgHourlyRate: stats?.avgHourlyRate ?? 0,
-      uploadMethods: stats?.uploadMethods ?? [],
-      topSpecialties: top.map((t) => ({ specialty: t._id, count: t.count })),
-    };
   }
 }

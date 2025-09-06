@@ -4,7 +4,7 @@ import {
   IsString,
   IsMongoId,
   IsBoolean,
-  IsDateString,
+  IsArray,
 } from 'class-validator';
 import { ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -16,67 +16,73 @@ import { EventLocationType } from 'src/common/enums/event-location-type.enum';
 export class EventFilterDto extends OmitType(BaseFilterDto, [
   'entityStatus',
 ] as const) {
-  @ApiPropertyOptional({ description: 'Filter by company ID' })
   @IsOptional()
   @IsMongoId()
+  @ApiPropertyOptional({ description: 'Filtra por empresa' })
   companyId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by event type', enum: EventType })
   @IsOptional()
   @IsEnum(EventType)
+  @ApiPropertyOptional({ description: 'Tipo de evento' })
   type?: EventType;
 
-  @ApiPropertyOptional({
-    description: 'Filter by event status',
-    enum: EventStatus,
-  })
   @IsOptional()
   @IsEnum(EventStatus)
+  @ApiPropertyOptional({ description: 'Estado del evento' })
   eventStatus?: EventStatus;
 
-  @ApiPropertyOptional({ description: 'Filter by location type' })
   @IsOptional()
   @IsEnum(EventLocationType)
+  @ApiPropertyOptional({ description: 'Tipo de localización' })
   locationType?: EventLocationType;
 
-  @ApiPropertyOptional({ description: 'Filter by city' })
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({
+    description: 'Ciudad (para eventos físicos/híbridos)',
+  })
   city?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by country' })
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({ description: 'País (para eventos físicos/híbridos)' })
   country?: string;
 
-  @ApiPropertyOptional({ description: 'Filter events from date' })
-  @IsOptional()
-  @IsDateString()
-  startDateFrom?: string;
-
-  @ApiPropertyOptional({ description: 'Filter events to date' })
-  @IsOptional()
-  @IsDateString()
-  startDateTo?: string;
-
-  @ApiPropertyOptional({ description: 'Filter events to date' })
-  @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by category' })
   @IsOptional()
   @IsString()
-  category?: string;
+  @ApiPropertyOptional({ description: 'Rango: fecha de inicio desde (ISO)' })
+  startFrom?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by tag' })
   @IsOptional()
   @IsString()
-  tag?: string;
+  @ApiPropertyOptional({ description: 'Rango: fecha de inicio hasta (ISO)' })
+  startTo?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by speaker ID' })
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({ description: 'Rango: fecha de fin desde (ISO)' })
+  endFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({ description: 'Rango: fecha de fin hasta (ISO)' })
+  endTo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ApiPropertyOptional({ description: 'Tags (match ANY)' })
+  tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ApiPropertyOptional({ description: 'Categorías (match ANY)' })
+  categories?: string[];
+
   @IsOptional()
   @IsMongoId()
+  @ApiPropertyOptional({
+    description: 'Eventos donde participa un speaker específico',
+  })
   speakerId?: string;
 
   @ApiPropertyOptional({

@@ -12,7 +12,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CreatePersonDto } from './create-person.dto';
 import { Transform } from 'class-transformer';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 
 export class CreateSpeakerWithPersonDto extends CreatePersonDto {
   @ApiProperty({
@@ -92,7 +92,7 @@ export class CreateSpeakerWithPersonDto extends CreatePersonDto {
     description: 'Enlaces a redes sociales',
     example: {
       linkedin: 'https://linkedin.com/in/speaker',
-      twitter: '@speaker',
+      twitter: 'https://linkedin.com/in/speaker',
       website: 'https://speaker.com',
     },
   })
@@ -125,10 +125,10 @@ export class CreateSpeakerWithPersonDto extends CreatePersonDto {
 
   @ApiPropertyOptional({
     description: 'Moneda para la tarifa por hora',
-    enum: CurrencyCode,
-    example: CurrencyCode.USD,
+    enum: Currency,
+    example: Currency.USD,
   })
   @IsOptional()
-  @IsEnum(CurrencyCode)
-  currency?: CurrencyCode;
+  @IsEnum(Currency)
+  currency?: Currency;
 }

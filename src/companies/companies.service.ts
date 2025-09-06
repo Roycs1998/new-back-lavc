@@ -19,27 +19,15 @@ import { CompanyFilterDto } from './dto/company-filter.dto';
 import { Company, CompanyDocument } from './entities/company.entity';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { CompanyDto } from './dto/company.dto';
-import { plainToInstance } from 'class-transformer';
 import { CompanyPaginatedDto } from './dto/company-pagination.dto';
+import { toObjectId } from 'src/utils/toObjectId';
+import { toDto } from 'src/utils/toDto';
 
 @Injectable()
 export class CompaniesService {
   constructor(
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
   ) {}
-
-  private toObjectId(id: string): Types.ObjectId {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new BadRequestException('El ID proporcionado no es válido');
-    }
-    return new Types.ObjectId(id);
-  }
-
-  private toDto(doc: CompanyDocument): CompanyDto {
-    return plainToInstance(CompanyDto, doc.toJSON(), {
-      excludeExtraneousValues: true,
-    });
-  }
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
@@ -80,7 +68,7 @@ export class CompaniesService {
       };
 
       const created = await this.companyModel.create(payload);
-      return this.toDto(created);
+      return toDto(created, CompanyDto);
     } catch (error: any) {
       throw new InternalServerErrorException(
         error?.message ?? 'No se pudo crear la empresa',
@@ -168,7 +156,7 @@ export class CompaniesService {
     const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
 
     return {
-      data: docs.map((d) => this.toDto(d)),
+      data: docs.map((d) => toDto(d, CompanyDto)),
       totalItems,
       totalPages,
       currentPage: safePage,
@@ -178,18 +166,18 @@ export class CompaniesService {
   }
 
   async findOne(id: string): Promise<CompanyDto> {
-    const _id = this.toObjectId(id);
+    const _id = toObjectId(id);
     const doc = await this.companyModel
       .findOne({ _id, entityStatus: { $ne: EntityStatus.DELETED } })
       .exec();
 
     if (!doc) throw new NotFoundException('Empresa no encontrada');
-    return this.toDto(doc);
+    return toDto(doc, CompanyDto);
   }
 
   async update(id: string, dto: UpdateCompanyDto): Promise<CompanyDto> {
     try {
-      const _id = this.toObjectId(id);
+      const _id = toObjectId(id);
 
       const existing = await this.companyModel
         .findOne({ _id, entityStatus: { $ne: EntityStatus.DELETED } })
@@ -227,7 +215,7 @@ export class CompaniesService {
         throw new NotFoundException('Empresa no encontrada');
       }
 
-      return this.toDto(updated);
+      return toDto(updated, CompanyDto);
     } catch (error: any) {
       throw new InternalServerErrorException(
         error?.message ?? 'No se pudo actualizar la empresa',
@@ -240,7 +228,7 @@ export class CompaniesService {
     status: EntityStatus,
     changedBy?: string,
   ): Promise<CompanyDto> {
-    const _id = this.toObjectId(id);
+    const _id = toObjectId(id);
 
     const match: Record<string, any> = { _id };
     if (status === EntityStatus.DELETED) {
@@ -250,13 +238,13 @@ export class CompaniesService {
     const update: any = {
       $set: {
         entityStatus: status,
-        ...(changedBy ? { updatedBy: this.toObjectId(changedBy) } : {}),
+        ...(changedBy ? { updatedBy: toObjectId(changedBy) } : {}),
       },
       $currentDate: { updatedAt: true as true },
     };
 
     if (status === EntityStatus.DELETED) {
-      if (changedBy) update.$set.deletedBy = this.toObjectId(changedBy);
+      if (changedBy) update.$set.deletedBy = toObjectId(changedBy);
       update.$currentDate.deletedAt = true as true; // registra fecha/hora de eliminación
     } else {
       update.$unset = { deletedAt: '', deletedBy: '' };
@@ -274,7 +262,7 @@ export class CompaniesService {
       throw new NotFoundException('Empresa no encontrada');
     }
 
-    return this.toDto(doc);
+    return toDto(doc, CompanyDto);
   }
 
   async softDelete(id: string, deletedBy?: string): Promise<CompanyDto> {

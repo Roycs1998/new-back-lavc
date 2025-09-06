@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 
 export type CartItemDocument = CartItem & Document;
 
@@ -28,8 +28,8 @@ export class CartItem {
   @Prop({ required: true, min: 0 })
   unitPrice: number;
 
-  @Prop({ type: String, enum: Object.values(CurrencyCode), default: 'PEN' })
-  currency: CurrencyCode;
+  @Prop({ type: String, enum: Object.values(Currency), default: 'PEN' })
+  currency: Currency;
 
   @Prop()
   reservedUntil?: Date;

@@ -10,8 +10,15 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { TicketType, TicketTypeDocument } from './entities/ticket.entity';
-import { Model, Types } from 'mongoose';
-import { EventDocument } from './entities/event.entity';
+import {
+  FilterQuery,
+  Model,
+  PipelineStage,
+  ProjectionType,
+  QueryOptions,
+  Types,
+} from 'mongoose';
+import { Event, EventDocument } from './entities/event.entity';
 import { CompaniesService } from 'src/companies/companies.service';
 import { SpeakersService } from 'src/speakers/speakers.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
@@ -21,6 +28,18 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import { EventFilterDto } from './dto/event-filter.dto';
 import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { CreateTicketTypeDto } from './dto/create-ticket-type.dto';
+import { toObjectId } from 'src/utils/toObjectId';
+import { EventDto } from './dto/event.dto';
+import { toDto } from 'src/utils/toDto';
+import { sanitizeDefined } from 'src/utils/sanitizeDefined';
+import { escapeRegex } from 'src/utils/escapeRegex';
+import { EventPaginatedDto } from './dto/event-pagination.dto';
+
+type SortDir = 1 | -1;
+
+function needsLookup(sortObj: Record<string, SortDir>): boolean {
+  return Object.keys(sortObj).some((k) => k.includes('.'));
+}
 
 @Injectable()
 export class EventsService {
@@ -30,294 +49,272 @@ export class EventsService {
     private ticketTypeModel: Model<TicketTypeDocument>,
     @Inject(forwardRef(() => CompaniesService))
     private companiesService: CompaniesService,
-    @Inject(forwardRef(() => SpeakersService))
-    private speakersService: SpeakersService,
   ) {}
 
   async create(
     createEventDto: CreateEventDto,
     createdBy: string,
-  ): Promise<EventDocument> {
-    try {
-      const company = await this.companiesService.findOne(
-        createEventDto.companyId,
-      );
-      if (company.entityStatus !== EntityStatus.ACTIVE) {
-        throw new BadRequestException('Company is not active');
-      }
-
-      if (createEventDto.speakers && createEventDto.speakers.length > 0) {
-        for (const speakerId of createEventDto.speakers) {
-          const speaker = await this.speakersService.findOne(speakerId);
-          if (speaker.companyId.toString() !== createEventDto.companyId) {
-            throw new BadRequestException(
-              `Speaker ${speakerId} does not belong to the specified company`,
-            );
-          }
-        }
-      }
-
-      let slug = createEventDto.slug;
-      if (!slug) {
-        slug = await this.generateUniqueSlug(createEventDto.title);
-      } else {
-        const existingEvent = await this.eventModel.findOne({
-          slug,
-          eventStatus: { $ne: EventStatus.DELETED },
-        });
-        if (existingEvent) {
-          throw new BadRequestException('Slug already exists');
-        }
-      }
-
-      const startDate = new Date(createEventDto.startDate);
-      const endDate = new Date(createEventDto.endDate);
-
-      if (startDate >= endDate) {
-        throw new BadRequestException('End date must be after start date');
-      }
-
-      if (startDate < new Date()) {
-        throw new BadRequestException('Event cannot start in the past');
-      }
-
-      const eventData = {
-        ...createEventDto,
-        slug,
-        companyId: new Types.ObjectId(createEventDto.companyId),
-        speakers:
-          createEventDto.speakers?.map((id) => new Types.ObjectId(id)) || [],
-        createdBy: new Types.ObjectId(createdBy),
-        eventStatus: EventStatus.DRAFT,
-        startDate,
-        endDate,
-      };
-
-      const event = new this.eventModel(eventData);
-      return await event.save();
-    } catch (error) {
-      throw error;
+  ): Promise<EventDto> {
+    const company = await this.companiesService.findOne(
+      createEventDto.companyId,
+    );
+    if (company.entityStatus !== EntityStatus.ACTIVE) {
+      throw new BadRequestException('La empresa no está activa.');
     }
+
+    let slug = createEventDto.slug;
+    const companyObjId = toObjectId(createEventDto.companyId);
+    if (!slug) {
+      slug = await this.generateUniqueSlug(createEventDto.title);
+    } else {
+      const exists = await this.eventModel.exists({
+        companyId: companyObjId,
+        slug,
+        eventStatus: { $ne: EventStatus.DELETED },
+      });
+      if (exists)
+        throw new BadRequestException('Slug ya existe para esta empresa');
+    }
+
+    const startDate = new Date(createEventDto.startDate);
+    const endDate = new Date(createEventDto.endDate);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new BadRequestException('Invalid startDate or endDate');
+    }
+    if (startDate >= endDate) {
+      throw new BadRequestException('End date must be after start date');
+    }
+    if (startDate < new Date()) {
+      throw new BadRequestException('Event cannot start in the past');
+    }
+
+    const payload = {
+      ...createEventDto,
+      companyId: companyObjId,
+      slug,
+      speakers: (createEventDto.speakers ?? []).map(toObjectId),
+      createdBy: toObjectId(createdBy),
+      eventStatus: EventStatus.DRAFT,
+      startDate,
+      endDate,
+    };
+
+    const created = await this.eventModel.create(payload);
+
+    const doc = await this.eventModel
+      .findById(created._id)
+      .populate('company')
+      .populate({
+        path: 'speakers',
+        populate: {
+          path: 'personId',
+        },
+      })
+      .exec();
+
+    if (!doc) {
+      throw new NotFoundException(
+        `No se encontró el evento con ID ${created._id}`,
+      );
+    }
+
+    return toDto(doc!, EventDto);
+  }
+
+  private parseSort(
+    sortRaw: string | undefined,
+    fallbackOrder: any,
+  ): Record<string, SortDir> {
+    const def: SortDir = fallbackOrder === 'asc' ? 1 : -1;
+    if (!sortRaw || !sortRaw.trim()) return { createdAt: -1 };
+
+    const out: Record<string, SortDir> = {};
+    for (const raw of sortRaw
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)) {
+      const hasPrefix = raw.startsWith('+') || raw.startsWith('-');
+      const field = hasPrefix ? raw.slice(1) : raw;
+      const dir: SortDir = raw.startsWith('-')
+        ? -1
+        : raw.startsWith('+')
+          ? 1
+          : def;
+
+      if (!/^[a-zA-Z0-9.]+$/.test(field)) continue;
+      out[field] = dir;
+    }
+    if (Object.keys(out).length === 0) out.createdAt = -1;
+    return out;
   }
 
   async findAll(
     filterDto: EventFilterDto,
     requestingUser?: any,
-  ): Promise<PaginationMetaDto<Event>> {
+  ): Promise<EventPaginatedDto> {
     const {
       page = 1,
       limit = 10,
       sort,
-      order,
+      order = 'desc',
       companyId,
       type,
       eventStatus,
       locationType,
       city,
       country,
-      startDateFrom,
-      startDateTo,
-      category,
-      tag,
+      startFrom,
+      startTo,
+      endFrom,
+      endTo,
+      tags,
+      categories,
       speakerId,
-      hasAvailableTickets,
-      minPrice,
-      maxPrice,
       search,
     } = filterDto;
+
     const skip = (page - 1) * limit;
-
-    const pipeline: any[] = [
-      {
-        $lookup: {
-          from: 'companies',
-          let: { uid: '$companyId' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$_id', '$$uid'] } } },
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                logo: 1,
-              },
-            },
-          ],
-          as: 'company',
-        },
-      },
-      { $unwind: '$company' },
-      {
-        $lookup: {
-          from: 'speakers',
-          localField: 'speakers',
-          foreignField: '_id',
-          as: 'speakerDetails',
-        },
-      },
-      {
-        $lookup: {
-          from: 'persons',
-          localField: 'speakerDetails.personId',
-          foreignField: '_id',
-          as: 'speakerPersons',
-        },
-      },
-      {
-        $lookup: {
-          from: 'users',
-          let: { uid: '$createdBy' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$_id', '$$uid'] } } },
-            {
-              $project: {
-                _id: 1,
-                firstName: 1,
-                lastName: 1,
-                email: 1,
-              },
-            },
-          ],
-          as: 'creator',
-        },
-      },
-      {
-        $addFields: {
-          creator: { $arrayElemAt: ['$creator', 0] },
-        },
-      },
-      {
-        $unset: [
-          'companyId',
-          'createdBy',
-          'updatedAt',
-          'approvedAt',
-          'approvedBy',
-          'speakers',
-        ],
-      },
-    ];
-
-    if (
-      hasAvailableTickets !== undefined ||
-      minPrice !== undefined ||
-      maxPrice !== undefined
-    ) {
-      pipeline.push({
-        $lookup: {
-          from: 'ticket_types',
-          localField: '_id',
-          foreignField: 'eventId',
-          as: 'ticketTypes',
-        },
-      });
-    }
-
-    const matchFilter: any = {};
+    const match: FilterQuery<Event> = {};
 
     if (
       requestingUser?.role === UserRole.COMPANY_ADMIN &&
       requestingUser?.companyId
     ) {
-      matchFilter.companyId = new Types.ObjectId(requestingUser.companyId);
+      match.companyId = toObjectId(requestingUser.companyId);
     } else if (companyId) {
-      matchFilter.companyId = new Types.ObjectId(companyId);
+      match.companyId = toObjectId(companyId);
     }
 
     if (eventStatus) {
-      matchFilter.eventStatus = eventStatus;
+      match.eventStatus = eventStatus;
+      if (eventStatus === EventStatus.DELETED) {
+      } else {
+        match.$or = [{ deletedAt: { $exists: false } }, { deletedAt: null }];
+      }
     } else if (requestingUser?.role === UserRole.USER || !requestingUser) {
-      matchFilter.eventStatus = {
+      match.eventStatus = {
         $in: [EventStatus.PUBLISHED, EventStatus.COMPLETED],
       };
+      match.$or = [{ deletedAt: { $exists: false } }, { deletedAt: null }];
+    } else {
+      match.eventStatus = { $ne: EventStatus.DELETED };
     }
 
-    if (type) {
-      matchFilter.type = type;
-    }
+    if (type) match.type = type;
 
-    if (locationType) {
-      matchFilter['location.type'] = locationType;
-    }
-    if (city) {
-      matchFilter['location.address.city'] = { $regex: city, $options: 'i' };
-    }
-    if (country) {
-      matchFilter['location.address.country'] = {
-        $regex: country,
+    if (locationType) match['location.type'] = locationType;
+
+    if (city)
+      match['location.address.city'] = {
+        $regex: escapeRegex(city),
         $options: 'i',
       };
-    }
-
-    if (startDateFrom || startDateTo) {
-      matchFilter.startDate = {};
-      if (startDateFrom) matchFilter.startDate.$gte = new Date(startDateFrom);
-      if (startDateTo) matchFilter.startDate.$lte = new Date(startDateTo);
-    }
-
-    if (category) {
-      matchFilter.categories = { $regex: category, $options: 'i' };
-    }
-    if (tag) {
-      matchFilter.tags = { $regex: tag, $options: 'i' };
-    }
-
-    if (speakerId) {
-      matchFilter.speakers = new Types.ObjectId(speakerId);
-    }
-
-    if (hasAvailableTickets) {
-      matchFilter['ticketTypes'] = {
-        $elemMatch: {
-          ticketStatus: TicketStatus.AVAILABLE,
-          $expr: { $gt: [{ $subtract: ['$quantity', '$sold'] }, 0] },
-        },
+    if (country)
+      match['location.address.country'] = {
+        $regex: escapeRegex(country),
+        $options: 'i',
       };
+
+    if (startFrom || startTo) {
+      match.startDate = {};
+      if (startFrom) (match.startDate as any).$gte = new Date(startFrom);
+      if (startTo) (match.startDate as any).$lte = new Date(startTo);
+    }
+    if (endFrom || endTo) {
+      match.endDate = {};
+      if (endFrom) (match.endDate as any).$gte = new Date(endFrom);
+      if (endTo) (match.endDate as any).$lte = new Date(endTo);
     }
 
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      const priceFilter: any = {};
-      if (minPrice !== undefined) priceFilter.$gte = minPrice;
-      if (maxPrice !== undefined) priceFilter.$lte = maxPrice;
-
-      matchFilter['ticketTypes.price'] = priceFilter;
+    if (Array.isArray(tags) && tags.length) {
+      match.tags = { $in: tags };
+    }
+    if (Array.isArray(categories) && categories.length) {
+      match.categories = { $in: categories };
     }
 
-    if (search) {
-      matchFilter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { shortDescription: { $regex: search, $options: 'i' } },
-        { tags: { $elemMatch: { $regex: search, $options: 'i' } } },
-        { categories: { $elemMatch: { $regex: search, $options: 'i' } } },
+    if (speakerId) match.speakers = toObjectId(speakerId);
+
+    if (search?.trim()) {
+      const r = { $regex: escapeRegex(search.trim()), $options: 'i' };
+      match.$or = [
+        { title: r },
+        { description: r },
+        { shortDescription: r },
+        { tags: r },
+        { categories: r },
       ];
     }
 
-    pipeline.push({ $match: matchFilter });
+    const sortObj = this.parseSort(sort, order);
 
-    const sortField: string =
-      typeof sort === 'string' && sort.trim() ? sort.trim() : 'createdAt';
-
-    const sortDir: 1 | -1 = order === 'asc' ? 1 : -1;
-
-    const safeSortField = /^[a-zA-Z0-9.]+$/.test(sortField)
-      ? sortField
-      : 'createdAt';
-
-    const sortOptions: Record<string, 1 | -1> = { [safeSortField]: sortDir };
-
-    pipeline.push({ $sort: sortOptions });
-
-    const [data, totalResult] = await Promise.all([
-      this.eventModel.aggregate([
-        ...pipeline,
+    if (needsLookup(sortObj)) {
+      const pipeline: PipelineStage[] = [
+        { $match: match },
+        {
+          $lookup: {
+            from: 'companies',
+            localField: 'companyId',
+            foreignField: '_id',
+            as: 'company',
+            pipeline: [
+              { $project: { name: 1, contactEmail: 1, contactPhone: 1 } },
+            ],
+          },
+        },
+        { $unwind: { path: '$company', preserveNullAndEmptyArrays: true } },
+        { $sort: sortObj as any },
         { $skip: skip },
         { $limit: limit },
-      ]),
-      this.eventModel.aggregate([...pipeline, { $count: 'total' }]),
+      ];
+
+      const [items, countAgg] = await Promise.all([
+        this.eventModel
+          .aggregate(pipeline)
+          .collation({ locale: 'es', strength: 2 })
+          .exec(),
+        this.eventModel
+          .aggregate([{ $match: match }, { $count: 'total' }])
+          .exec(),
+      ]);
+
+      const data = items.map((i) => toDto(i, EventDto));
+      const totalItems = countAgg[0]?.total ?? 0;
+      const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+
+      return {
+        data,
+        totalItems,
+        totalPages,
+        currentPage: page,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      };
+    }
+
+    const projection: ProjectionType<Event> = {};
+    const query = this.eventModel
+      .find(match, projection, {
+        collation: { locale: 'es', strength: 2 },
+      } as QueryOptions)
+      .populate('company')
+      .populate({
+        path: 'speakers',
+        populate: {
+          path: 'personId',
+        },
+      })
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limit);
+
+    const [items, totalItems] = await Promise.all([
+      query.lean().exec(),
+      this.eventModel.countDocuments(match).exec(),
     ]);
 
-    const totalItems = totalResult[0]?.total || 0;
-    const totalPages = Math.ceil(totalItems / limit);
+    const data = items.map((i) => toDto(i, EventDto));
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return {
       data,
@@ -329,19 +326,12 @@ export class EventsService {
     };
   }
 
-  async findOne(
-    id: string,
-    includeDeleted = false,
-    requestingUser?: any,
-  ): Promise<EventDocument> {
+  async findOne(id: string, requestingUser?: any): Promise<EventDto> {
     const filter: any = { _id: id };
-    if (!includeDeleted) {
-      filter.eventStatus = { $ne: EventStatus.DELETED };
-    }
 
     const event = await this.eventModel
       .findOne(filter)
-      .populate('companyId', 'name contactEmail status')
+      .populate('company')
       .populate({
         path: 'speakers',
         populate: {
@@ -349,12 +339,10 @@ export class EventsService {
           select: 'firstName lastName email',
         },
       })
-      .populate('createdBy', 'email role')
-      .populate('updatedBy', 'email role')
       .exec();
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
+      throw new NotFoundException(`Evento con ID ${id} no encontrado`);
     }
 
     if (
@@ -363,7 +351,7 @@ export class EventsService {
     ) {
       if (event.companyId._id.toString() !== requestingUser.companyId) {
         throw new ForbiddenException(
-          'Access denied. Event belongs to different company.',
+          'Acceso denegado. El evento pertenece a otra empresa.',
         );
       }
     }
@@ -376,11 +364,13 @@ export class EventsService {
           EventStatus.APPROVED,
         ].includes(event.eventStatus)
       ) {
-        throw new ForbiddenException('Event is not publicly available');
+        throw new ForbiddenException(
+          'El evento no está disponible públicamente',
+        );
       }
     }
 
-    return event;
+    return toDto(event, EventDto);
   }
 
   async findBySlug(slug: string): Promise<EventDocument> {
@@ -389,18 +379,17 @@ export class EventsService {
         slug,
         eventStatus: { $in: [EventStatus.PUBLISHED, EventStatus.COMPLETED] },
       })
-      .populate('companyId', 'name contactEmail')
+      .populate('company')
       .populate({
         path: 'speakers',
         populate: {
           path: 'personId',
-          select: 'firstName lastName email',
         },
       })
       .exec();
 
     if (!event) {
-      throw new NotFoundException(`Event with slug '${slug}' not found`);
+      throw new NotFoundException(`No se encontró el evento con slug '${slug}`);
     }
 
     return event;
@@ -410,78 +399,61 @@ export class EventsService {
     id: string,
     updateEventDto: UpdateEventDto,
     updatedBy: string,
-  ): Promise<EventDocument> {
-    try {
-      const existingEvent = await this.findOne(id);
+  ): Promise<EventDto> {
+    const existing = await this.eventModel.findById(id).exec();
+    if (!existing) throw new NotFoundException(`Event with ID ${id} not found`);
 
-      if (updateEventDto.speakers) {
-        for (const speakerId of updateEventDto.speakers) {
-          const speaker = await this.speakersService.findOne(speakerId);
-          if (
-            speaker.companyId.toString() !== existingEvent.companyId.toString()
-          ) {
-            throw new BadRequestException(
-              `Speaker ${speakerId} does not belong to the event's company`,
-            );
-          }
-        }
-      }
-
-      if (updateEventDto.slug && updateEventDto.slug !== existingEvent.slug) {
-        const existingSlugEvent = await this.eventModel.findOne({
-          slug: updateEventDto.slug,
-          _id: { $ne: id },
-          eventStatus: { $ne: EventStatus.DELETED },
-        });
-        if (existingSlugEvent) {
-          throw new BadRequestException('Slug already exists');
-        }
-      }
-
-      const startDate = updateEventDto.startDate
-        ? new Date(updateEventDto.startDate)
-        : existingEvent.startDate;
-      const endDate = updateEventDto.endDate
-        ? new Date(updateEventDto.endDate)
-        : existingEvent.endDate;
-
-      if (startDate >= endDate) {
-        throw new BadRequestException('End date must be after start date');
-      }
-
-      const updateData: any = { ...updateEventDto };
-
-      if (updateEventDto.speakers) {
-        updateData.speakers = updateEventDto.speakers.map(
-          (id) => new Types.ObjectId(id),
-        );
-      }
-
-      updateData.updatedBy = new Types.ObjectId(updatedBy);
-      updateData.updatedAt = new Date();
-
-      const event = await this.eventModel
-        .findByIdAndUpdate(id, updateData, { new: true })
-        .populate('companyId', 'name contactEmail')
-        .populate({
-          path: 'speakers',
-          populate: {
-            path: 'personId',
-            select: 'firstName lastName email',
-          },
-        })
-        .populate('createdBy', 'email role')
-        .populate('updatedBy', 'email role')
-        .exec();
-
-      if (!event) {
-        throw new NotFoundException(`Event with ID ${id} not found`);
-      }
-
-      return event;
-    } catch (error) {
-      throw error;
+    if (updateEventDto.slug && updateEventDto.slug !== existing.slug) {
+      const exists = await this.eventModel.exists({
+        slug: updateEventDto.slug,
+        companyId: existing.companyId,
+        _id: { $ne: existing._id },
+        eventStatus: { $ne: EventStatus.DELETED },
+      });
+      if (exists)
+        throw new BadRequestException('Slug ya existe para esta empresa');
     }
+
+    const startDate = updateEventDto.startDate
+      ? new Date(updateEventDto.startDate)
+      : existing.startDate;
+    const endDate = updateEventDto.endDate
+      ? new Date(updateEventDto.endDate)
+      : existing.endDate;
+    if (startDate >= endDate) {
+      throw new BadRequestException(
+        'La fecha de finalización debe ser posterior a la fecha de inicio',
+      );
+    }
+
+    const $set = sanitizeDefined({
+      ...updateEventDto,
+      speakers: Array.isArray(updateEventDto.speakers)
+        ? updateEventDto.speakers.map(toObjectId)
+        : undefined,
+      updatedBy: toObjectId(updatedBy),
+      updatedAt: new Date(),
+    });
+
+    const updated = await this.eventModel
+      .findByIdAndUpdate(
+        id,
+        { $set },
+        { new: true, runValidators: true, context: 'query' },
+      )
+      .populate('company')
+      .populate({
+        path: 'speakers',
+        populate: {
+          path: 'personId',
+        },
+      })
+      .exec();
+
+    if (!updated)
+      throw new NotFoundException(`Evento con ID ${id} no encontrado`);
+
+    return toDto(updated, EventDto);
   }
 
   async changeEventStatus(
@@ -489,9 +461,8 @@ export class EventsService {
     eventStatus: EventStatus,
     changedBy: string,
     rejectionReason?: string,
-  ): Promise<EventDocument> {
-    const changedById = new Types.ObjectId(changedBy);
-
+  ): Promise<EventDto> {
+    const changedById = toObjectId(changedBy);
     const $set: Record<string, any> = {
       eventStatus,
       updatedBy: changedById,
@@ -502,87 +473,78 @@ export class EventsService {
       $set.approvedBy = changedById;
       $set.approvedAt = new Date();
       $unset.rejectionReason = '';
-    } else if (eventStatus === EventStatus.REJECTED) {
+    } else if (
+      eventStatus === EventStatus.REJECTED ||
+      eventStatus == EventStatus.CANCELLED
+    ) {
       if (!rejectionReason?.trim()) {
         throw new BadRequestException(
-          'rejectionReason is required when rejecting an event',
+          'Se requiere rejectReason cuando se rechaza un evento',
         );
       }
-      $set.rejectionReason = rejectionReason;
+      $set.rejectionReason = rejectionReason.trim();
       $unset.approvedBy = '';
       $unset.approvedAt = '';
+    } else {
+      $unset.rejectionReason = '';
     }
 
     const updateDoc: any = { $set, $currentDate: { updatedAt: true } };
     if (Object.keys($unset).length) updateDoc.$unset = $unset;
 
-    const event = (await this.eventModel
+    const event = await this.eventModel
       .findByIdAndUpdate(id, updateDoc, {
         new: true,
         runValidators: true,
         context: 'query',
       })
-      .populate('companyId', 'name contactEmail')
-      .populate('speakers')
-      .populate('approvedBy', 'email role')
-      .exec()) as EventDocument | null;
+      .populate('company')
+      .populate({
+        path: 'speakers',
+        populate: {
+          path: 'personId',
+        },
+      })
+      .exec();
 
-    if (!event) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
-    }
-
-    return event;
+    if (!event) throw new NotFoundException(`Event with ID ${id} not found`);
+    return toDto(event, EventDto);
   }
 
   async submitForReview(id: string) {
     const event = await this.eventModel.findOne({ _id: id });
 
-    if (!event) throw new NotFoundException('Event not found');
+    if (!event) throw new NotFoundException('Evento no encontrado');
 
     if (event.eventStatus !== EventStatus.DRAFT) {
-      throw new BadRequestException('Only draft events can be submitted');
+      throw new BadRequestException(
+        'Sólo se pueden enviar borradores de eventos',
+      );
     }
 
     if (!event.location?.type)
-      throw new BadRequestException('Location type is required');
+      throw new BadRequestException('El tipo de ubicación es obligatorio');
 
     if (event.location.capacity && event.location.capacity < 1)
-      throw new BadRequestException('Capacity must be >= 1');
+      throw new BadRequestException('La capacidad debe ser >= 1');
 
     event.eventStatus = EventStatus.PENDING_APPROVAL;
+
     event.rejectionReason = undefined;
+
     return event.save();
   }
 
-  async softDelete(id: string, deletedBy: string): Promise<EventDocument> {
-    const updateDoc: any = {
-      $set: {
-        deletedBy: new Types.ObjectId(deletedBy),
-      },
-      $currentDate: { deletedAt: true, updatedAt: true },
-    };
-
-    const doc = await this.eventModel
-      .findByIdAndUpdate(id, updateDoc, {
-        new: true,
-        runValidators: true,
-        context: 'query',
-      })
-      .exec();
-
-    if (!doc) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
-    }
-
-    return doc;
+  async softDelete(id: string, deletedBy: string): Promise<EventDto> {
+    return this.changeEventStatus(id, EventStatus.DELETED, deletedBy);
   }
 
-  async publish(id: string, publishedBy: string): Promise<EventDocument> {
+  async publish(id: string, publishedBy: string): Promise<EventDto> {
     const event = await this.findOne(id);
 
     if (event.eventStatus !== EventStatus.APPROVED) {
       throw new BadRequestException(
-        'Event must be approved before it can be published',
+        'El evento debe ser aprobado antes de poder publicarse.',
       );
     }
 
@@ -593,38 +555,13 @@ export class EventsService {
     id: string,
     cancelledBy: string,
     reason?: string,
-  ): Promise<EventDocument> {
-    await this.findOne(id);
-
-    const $set: Record<string, any> = {
-      eventStatus: EventStatus.CANCELLED,
-      updatedBy: new Types.ObjectId(cancelledBy),
-    };
-
-    if (reason?.trim()) {
-      $set.rejectionReason = reason.trim();
-    }
-
-    const updateDoc: any = {
-      $set,
-      $currentDate: { updatedAt: true },
-    };
-
-    const event = (await this.eventModel
-      .findByIdAndUpdate(id, updateDoc, {
-        new: true,
-        runValidators: true,
-        context: 'query',
-      })
-      .populate('companyId', 'name contactEmail')
-      .populate('speakers')
-      .exec()) as EventDocument | null;
-
-    if (!event) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
-    }
-
-    return event;
+  ): Promise<EventDto> {
+    return this.changeEventStatus(
+      id,
+      EventStatus.CANCELLED,
+      cancelledBy,
+      reason ?? '',
+    );
   }
 
   async createTicketType(
@@ -698,28 +635,6 @@ export class EventsService {
     }
 
     await this.ticketTypeModel.findByIdAndDelete(ticketTypeId);
-  }
-
-  private async generateUniqueSlug(title: string): Promise<string> {
-    let baseSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-
-    let slug = baseSlug;
-    let counter = 1;
-
-    while (
-      await this.eventModel.findOne({
-        slug,
-        eventStatus: { $ne: EventStatus.DELETED },
-      })
-    ) {
-      slug = `${baseSlug}-${counter}`;
-      counter++;
-    }
-
-    return slug;
   }
 
   async getEventStats(eventId: string): Promise<any> {
@@ -840,5 +755,27 @@ export class EventsService {
       eventsByStatus: statusCounts,
       ...financialStats,
     };
+  }
+
+  private async generateUniqueSlug(title: string): Promise<string> {
+    let baseSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (
+      await this.eventModel.findOne({
+        slug,
+        eventStatus: { $ne: EventStatus.DELETED },
+      })
+    ) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    return slug;
   }
 }

@@ -3,7 +3,7 @@ import { Document, Types } from 'mongoose';
 import { PaymentStatus } from '../../common/enums/payment-status.enum';
 import { PaymentMethod } from '../../common/enums/payment-method.enum';
 import { RefundReason } from '../../common/enums/refund-reason.enum';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 
 export type PaymentTransactionDocument = PaymentTransaction & Document;
 
@@ -48,8 +48,8 @@ export class PaymentTransaction {
   @Prop({ required: true, min: 0 })
   amount: number;
 
-  @Prop({ type: String, enum: CurrencyCode, default: CurrencyCode.PEN })
-  currency: CurrencyCode;
+  @Prop({ type: String, enum: Currency, default: Currency.PEN })
+  currency: Currency;
 
   @Prop({
     type: String,

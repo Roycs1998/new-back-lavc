@@ -12,60 +12,48 @@ import {
   Query,
 } from '@nestjs/common';
 import { SpeakersService } from './speakers.service';
-import { CreateSpeakerDto } from './dto/create-speaker.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CompanyScopeGuard } from 'src/common/guards/company-scope.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user-role.enum';
-import { CompanyScope } from 'src/common/decorators/company-scope.decorator';
-import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 import { CreateSpeakerWithPersonDto } from 'src/persons/dto/create-speaker-with-person.dto';
 import { SpeakerFilterDto } from './dto/speaker-filter.dto';
-import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { StatusDto } from 'src/common/dto/status.dto';
+import { SpeakerDto } from './dto/speaker.dto';
+import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 
+@ApiTags('Oradoras')
 @Controller('speakers')
+@UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
+@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+@ApiBearerAuth('JWT-auth')
 export class SpeakersController {
   constructor(private readonly speakersService: SpeakersService) {}
 
-  @Post()
+  @Post('with-person')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Create a new speaker (Admin only)' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 201, description: 'Speaker created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - insufficient permissions',
+  @ApiOperation({ summary: 'Crear speaker y su persona en un solo paso' })
+  @ApiCreatedResponse({ type: SpeakerDto })
+  @ApiBadRequestResponse({
+    description: 'Validación fallida o empresa inactiva',
   })
-  create(
-    @Body() createSpeakerDto: CreateSpeakerDto,
-    @CurrentUser() currentUser: CurrentUserData,
-  ) {
-    return this.speakersService.create(createSpeakerDto, currentUser.id);
-  }
-
-  @Post('create-with-person')
-  @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Create speaker with person data in one operation' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 201,
-    description: 'Speaker and person created successfully',
-  })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
   createSpeakerWithPerson(
     @Body() createSpeakerWithPersonDto: CreateSpeakerWithPersonDto,
     @CurrentUser() currentUser: CurrentUserData,
@@ -77,38 +65,23 @@ export class SpeakersController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
-  @ApiOperation({ summary: 'Get all speakers with advanced filtering' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Speakers retrieved successfully' })
-  findAll(
-    @Query() filterDto: SpeakerFilterDto,
-    @CurrentUser() currentUser: CurrentUserData,
-  ) {
-    return this.speakersService.findAll(filterDto, currentUser);
-  }
-
-  @Get('public')
   @Public()
-  @ApiOperation({ summary: 'Get active speakers (public access)' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Active speakers retrieved successfully',
+  @ApiOperation({
+    summary: 'Listar speakers (paginado y filtrado)',
+    description:
+      'Soporta búsqueda full-text (search), filtros por company, specialty, arrays (languages/topics), rangos (años/fee), fechas y orden dinámico.',
   })
-  findAllPublic(@Query() filterDto: SpeakerFilterDto) {
+  @ApiOkResponse({ type: SpeakerPaginatedDto })
+  findAll(@Query() filterDto: SpeakerFilterDto) {
     return this.speakersService.findAll(filterDto);
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Update speaker by ID' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Speaker updated successfully' })
-  @ApiResponse({ status: 404, description: 'Speaker not found' })
+  @ApiOperation({ summary: 'Actualizar un speaker' })
+  @ApiOkResponse({ type: SpeakerDto })
+  @ApiBadRequestResponse({ description: 'Validación fallida' })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() updateSpeakerDto: UpdateSpeakerDto,
@@ -120,13 +93,10 @@ export class SpeakersController {
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Change speaker status' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Speaker status updated successfully',
+  @ApiOperation({
+    summary: 'Cambiar el estado lógico del speaker (ACTIVE/INACTIVE/DELETED)',
   })
+  @ApiOkResponse({ type: SpeakerDto })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: StatusDto,
@@ -139,35 +109,11 @@ export class SpeakersController {
     );
   }
 
-  @Patch(':id/editable-users/:userId')
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Add user to speaker editable list' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'User added to editable list successfully',
-  })
-  addEditableUser(
-    @Param('id', ParseObjectIdPipe) id: string,
-    @Param('userId', ParseObjectIdPipe) userId: string,
-    @CurrentUser() currentUser: CurrentUserData,
-  ) {
-    return this.speakersService.addEditableUser(id, userId, currentUser.id);
-  }
-
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Soft delete speaker by ID' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Speaker soft deleted successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Speaker not found' })
+  @ApiOperation({ summary: 'Eliminar lógicamente un speaker' })
+  @ApiOkResponse({ type: SpeakerDto })
   softDelete(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,

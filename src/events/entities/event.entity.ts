@@ -137,7 +137,9 @@ const EventSettingsSchema = SchemaFactory.createForClass(EventSettings);
 @Schema({
   collection: 'events',
   versionKey: false,
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
+  timestamps: true,
 })
 export class Event {
   @Prop({ type: String, required: true, trim: true })
@@ -230,6 +232,13 @@ export class Event {
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);
+
+EventSchema.virtual('company', {
+  ref: 'Company',
+  localField: 'companyId',
+  foreignField: '_id',
+  justOne: true,
+});
 
 EventSchema.index({ companyId: 1, slug: 1 }, { unique: true, sparse: true });
 EventSchema.index({ companyId: 1, eventStatus: 1 });

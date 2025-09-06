@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { EntityStatus } from '../../common/enums/entity-status.enum';
 import { TicketLifecycleStatus } from 'src/common/enums/ticket-lifecycle-status.enum';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 import { DocumentType } from 'src/common/enums/document-type.enum';
 
 export type TicketDocument = Ticket & Document;
@@ -57,8 +57,8 @@ export class Ticket {
   @Prop({ required: true, min: 0 })
   price: number;
 
-  @Prop({ type: String, enum: CurrencyCode, default: CurrencyCode.PEN })
-  currency: CurrencyCode;
+  @Prop({ type: String, enum: Currency, default: Currency.PEN })
+  currency: Currency;
 
   @Prop({
     type: String,

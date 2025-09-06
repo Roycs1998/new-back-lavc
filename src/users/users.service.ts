@@ -24,6 +24,7 @@ import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 import { UserDto } from './dto/user.dto';
 import { plainToInstance } from 'class-transformer';
 import { UserPaginatedDto } from './dto/user-pagination.dto';
+import { toDto } from 'src/utils/toDto';
 
 @Injectable()
 export class UsersService {
@@ -32,12 +33,6 @@ export class UsersService {
     @Inject(forwardRef(() => PersonsService))
     private personsService: PersonsService,
   ) {}
-
-  private toDto(doc: UserDocument): UserDto {
-    return plainToInstance(UserDto, doc.toJSON(), {
-      excludeExtraneousValues: true,
-    });
-  }
 
   async create(dto: CreateUserDto): Promise<UserDto> {
     if (dto.role === UserRole.COMPANY_ADMIN && !dto.companyId) {
@@ -80,7 +75,7 @@ export class UsersService {
       throw new InternalServerErrorException('No se pudo crear el usuario.');
     }
 
-    return this.toDto(user);
+    return toDto(user, UserDto);
   }
 
   async createUserWithPerson(dto: CreateUserWithPersonDto): Promise<UserDto> {
@@ -109,7 +104,7 @@ export class UsersService {
     if (!populatedUser)
       throw new NotFoundException(`Usuario con ID ${user.id} no encontrado`);
 
-    return this.toDto(populatedUser);
+    return toDto(populatedUser, UserDto);
   }
 
   async findAll(filterDto: UserFilterDto): Promise<UserPaginatedDto> {
@@ -223,7 +218,7 @@ export class UsersService {
     const totalPages = totalItems ? Math.ceil(totalItems / safeLimit) : 1;
 
     return {
-      data: data.map((doc) => this.toDto(doc)),
+      data: data.map((doc) => toDto(doc, UserDto)),
       totalItems,
       totalPages,
       currentPage: safePage,
@@ -243,7 +238,7 @@ export class UsersService {
 
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
-    return this.toDto(user);
+    return toDto(user, UserDto);
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserDocument> {
@@ -310,7 +305,7 @@ export class UsersService {
       .exec();
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    return this.toDto(user);
+    return toDto(user, UserDto);
   }
 
   async updateLastLogin(id: string): Promise<void> {
@@ -337,7 +332,7 @@ export class UsersService {
       .exec();
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    return this.toDto(user);
+    return toDto(user, UserDto);
   }
 
   async changeStatus(
@@ -368,7 +363,7 @@ export class UsersService {
 
     if (!doc) throw new NotFoundException('Usuario no encontrado');
 
-    return this.toDto(doc);
+    return toDto(doc, UserDto);
   }
 
   async softDelete(id: string, deletedBy?: string): Promise<UserDto> {
@@ -391,7 +386,7 @@ export class UsersService {
       return null;
     }
 
-    return this.toDto(user);
+    return toDto(user, UserDto);
   }
 
   async validatePassword(userId: string, password: string): Promise<boolean> {

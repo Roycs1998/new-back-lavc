@@ -110,7 +110,7 @@ export class EventsController {
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
-    return this.eventsService.findOne(id, false, currentUser);
+    return this.eventsService.findOne(id, currentUser);
   }
 
   @Get('slug/:slug')

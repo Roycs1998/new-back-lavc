@@ -3,106 +3,135 @@ import {
   IsOptional,
   IsNumber,
   IsArray,
-  IsBoolean,
-  IsObject,
   IsMongoId,
   Min,
   Max,
   IsEnum,
+  IsUrl,
+  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Currency } from 'src/common/enums/currency.enum';
+import { Type } from 'class-transformer';
+import { UploadSource } from '../entities/speaker.entity';
+import { EntityStatus } from 'src/common/enums/entity-status.enum';
+
+class SocialMediaCreateDto {
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://www.linkedin.com/in/jdoe' })
+  linkedin?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://twitter.com/jdoe' })
+  twitter?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://jdoe.dev' })
+  website?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://github.com/jdoe' })
+  github?: string;
+}
+
+class AudienceSizeCreateDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @ApiPropertyOptional({ example: 50, minimum: 0 })
+  min?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @ApiPropertyOptional({ example: 300, minimum: 0 })
+  max?: number;
+}
 
 export class CreateSpeakerDto {
-  @ApiProperty({ description: 'Person ID reference' })
   @IsMongoId()
+  @ApiProperty({ example: '66a9d8f7a2a0b7b3e1b0d111' })
   personId: string;
 
-  @ApiProperty({ description: 'Company ID reference' })
   @IsMongoId()
+  @ApiProperty({ example: '66a9d8f7a2a0b7b3e1b0d222' })
   companyId: string;
 
-  @ApiProperty({ description: 'Speaker specialty/expertise area' })
   @IsString()
+  @ApiProperty({ example: 'Gastroenterología' })
   specialty: string;
 
-  @ApiPropertyOptional({ description: 'Speaker biography' })
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({
+    example: 'Especialista en hígado graso (NAFLD/NASH).',
+  })
   biography?: string;
 
-  @ApiProperty({ description: 'Years of experience', minimum: 0, maximum: 50 })
   @IsNumber()
   @Min(0)
   @Max(50)
+  @ApiProperty({ example: 8, minimum: 0, maximum: 50 })
   yearsExperience: number;
 
-  @ApiPropertyOptional({ description: 'Professional certifications' })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @ApiPropertyOptional({ type: [String], example: ['ACLS', 'BLS'] })
   certifications?: string[];
 
-  @ApiPropertyOptional({
-    description: 'Hourly rate',
-    minimum: 0,
-    maximum: 10000,
-  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(10000)
+  @ApiPropertyOptional({ example: 120 })
   hourlyRate?: number;
 
-  @ApiPropertyOptional({
-    description: 'Currency for hourly rate',
-    enum: ['USD', 'PEN', 'EUR'],
-  })
   @IsOptional()
-  @IsEnum(['USD', 'PEN', 'EUR'])
-  currency?: string;
+  @IsEnum(Currency)
+  @ApiPropertyOptional({ enum: Currency, example: Currency.PEN })
+  currency?: Currency;
 
-  @ApiPropertyOptional({ description: 'Speaker availability', default: true })
   @IsOptional()
-  @IsBoolean()
-  isAvailable?: boolean;
+  @ValidateNested()
+  @Type(() => SocialMediaCreateDto)
+  @ApiPropertyOptional({ type: SocialMediaCreateDto })
+  socialMedia?: SocialMediaCreateDto;
 
-  @ApiPropertyOptional({ description: 'Social media links' })
   @IsOptional()
-  @IsObject()
-  socialMedia?: {
-    linkedin?: string;
-    twitter?: string;
-    website?: string;
-    github?: string;
-  };
+  @IsEnum(UploadSource)
+  @ApiPropertyOptional({ enum: UploadSource, example: UploadSource.MANUAL })
+  uploadedVia?: UploadSource;
 
-  @ApiPropertyOptional({ description: 'Languages speaker can present in' })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @ApiPropertyOptional({ type: [String], example: ['es', 'en'] })
   languages?: string[];
 
-  @ApiPropertyOptional({ description: 'Topics speaker can cover' })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['hepatología', 'hígado graso'],
+  })
   topics?: string[];
 
-  @ApiPropertyOptional({ description: 'Preferred audience size range' })
   @IsOptional()
-  @IsObject()
-  audienceSize?: {
-    min?: number;
-    max?: number;
-  };
+  @ValidateNested()
+  @Type(() => AudienceSizeCreateDto)
+  @ApiPropertyOptional({ type: AudienceSizeCreateDto })
+  audienceSize?: AudienceSizeCreateDto;
 
-  @ApiPropertyOptional({ description: 'Additional notes about speaker' })
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({ example: 'Notas internas del speaker' })
   notes?: string;
 
-  @ApiPropertyOptional({ description: 'How speaker was uploaded' })
   @IsOptional()
-  @IsString()
-  uploadedVia?: string;
+  @IsEnum(EntityStatus)
+  @ApiPropertyOptional({ enum: EntityStatus, example: EntityStatus.ACTIVE })
+  entityStatus?: EntityStatus;
 }

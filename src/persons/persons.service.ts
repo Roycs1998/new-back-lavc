@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -10,7 +9,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Person, PersonDocument } from './entities/person.entity';
 import { Model, Types } from 'mongoose';
 import { PersonType } from 'src/common/enums/person-type.enum';
-import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateUserWithPersonDto } from './dto/create-user-with-person.dto';
 import { CreateSpeakerWithPersonDto } from './dto/create-speaker-with-person.dto';
@@ -22,6 +20,7 @@ import { normalizeEmail } from 'src/utils/normalizeEmail';
 import { PersonDto } from './dto/person.dto';
 import { PersonPaginatedDto } from './dto/person-pagination.dto';
 import { plainToInstance } from 'class-transformer';
+import { toDto } from 'src/utils/toDto';
 
 @Injectable()
 export class PersonsService {
@@ -48,7 +47,7 @@ export class PersonsService {
       entityStatus: EntityStatus.ACTIVE,
     });
 
-    return this.toDto(await person.save());
+    return toDto(await person.save(), PersonDto);
   }
 
   async createForUser(dto: CreateUserWithPersonDto): Promise<PersonDto> {
@@ -146,7 +145,7 @@ export class PersonsService {
     const totalPages = totalItems ? Math.ceil(totalItems / safeLimit) : 1;
 
     return {
-      data: data.map((doc) => this.toDto(doc)),
+      data: data.map((doc) => toDto(doc, PersonDto)),
       totalItems,
       totalPages,
       currentPage: safePage,
@@ -167,7 +166,7 @@ export class PersonsService {
     if (!person) {
       throw new NotFoundException(`Persona con ID ${id} no encontrada`);
     }
-    return this.toDto(person);
+    return toDto(person, PersonDto);
   }
 
   async findByEmail(email: string, includeDeleted = false): Promise<PersonDto> {
@@ -182,7 +181,7 @@ export class PersonsService {
       throw new NotFoundException(`Persona con email ${email} no encontrada`);
     }
 
-    return this.toDto(person);
+    return toDto(person, PersonDto);
   }
 
   async update(id: string, dto: UpdatePersonDto): Promise<PersonDto> {
@@ -214,7 +213,7 @@ export class PersonsService {
 
     if (!updated) throw new NotFoundException('Persona no encontrada');
 
-    return this.toDto(updated);
+    return toDto(updated, PersonDto);
   }
 
   async softDelete(id: string, deletedBy?: string): Promise<PersonDto> {
@@ -247,12 +246,6 @@ export class PersonsService {
       .exec();
 
     if (!doc) throw new NotFoundException('Persona no encontrada');
-    return this.toDto(doc);
-  }
-
-  private toDto(document: PersonDocument): PersonDto {
-    return plainToInstance(PersonDto, document.toJSON(), {
-      excludeExtraneousValues: true,
-    });
+    return toDto(doc, PersonDto);
   }
 }

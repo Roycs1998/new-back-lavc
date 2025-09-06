@@ -9,7 +9,6 @@ export type PersonDocument = Person & Document;
   collection: 'persons',
   versionKey: false,
   discriminatorKey: 'type',
-  id: false,
   toJSON: { virtuals: true },
   toObject: { virtuals: true },
   timestamps: true,

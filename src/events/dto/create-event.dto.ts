@@ -10,291 +10,314 @@ import {
   Min,
   Max,
   IsMongoId,
+  MaxLength,
+  IsNotEmpty,
+  IsUrl,
+  IsDate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventType } from '../../common/enums/event-type.enum';
 import { EventLocationType } from 'src/common/enums/event-location-type.enum';
 import { AgendaItemType } from 'src/common/enums/agenda-item-type.enum';
+import { EventStatus } from 'src/common/enums/event-status.enum';
 
-class AddressDto {
-  @ApiPropertyOptional({ description: 'Street address' })
+export class EventAddressCreateDto {
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  @ApiPropertyOptional({ example: 'Av. Las Flores 123' })
   street?: string;
 
-  @ApiProperty({ description: 'City' })
   @IsString()
-  city: string;
+  @IsNotEmpty()
+  @MaxLength(80)
+  @ApiProperty({ example: 'Lima' })
+  city!: string;
 
-  @ApiPropertyOptional({ description: 'State/Province' })
   @IsOptional()
   @IsString()
+  @MaxLength(80)
+  @ApiPropertyOptional({ example: 'Lima' })
   state?: string;
 
-  @ApiProperty({ description: 'Country' })
   @IsString()
-  country: string;
+  @IsNotEmpty()
+  @MaxLength(80)
+  @ApiProperty({ example: 'Perú' })
+  country!: string;
 
-  @ApiPropertyOptional({ description: 'ZIP/Postal code' })
   @IsOptional()
   @IsString()
+  @MaxLength(20)
+  @ApiPropertyOptional({ example: '15001' })
   zipCode?: string;
 }
 
-class VirtualDetailsDto {
-  @ApiPropertyOptional({ description: 'Virtual platform (Zoom, Teams, etc.)' })
+export class EventVirtualDetailsCreateDto {
   @IsOptional()
   @IsString()
+  @MaxLength(60)
+  @ApiPropertyOptional({ example: 'Zoom' })
   platform?: string;
 
-  @ApiPropertyOptional({ description: 'Meeting URL' })
   @IsOptional()
-  @IsString()
+  @IsUrl()
+  @ApiPropertyOptional({
+    example: 'https://us02web.zoom.us/j/123456789?pwd=abc',
+  })
   meetingUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Meeting ID' })
   @IsOptional()
   @IsString()
+  @MaxLength(60)
+  @ApiPropertyOptional({ example: '123-456-789' })
   meetingId?: string;
 
-  @ApiPropertyOptional({ description: 'Meeting passcode' })
   @IsOptional()
   @IsString()
+  @MaxLength(60)
+  @ApiPropertyOptional({ example: 'p@ss2025' })
   passcode?: string;
 }
 
-class EventLocationDto {
-  @ApiProperty({
-    description: 'Location type',
-    enum: EventLocationType,
-  })
+export class EventLocationCreateDto {
   @IsEnum(EventLocationType)
-  type: EventLocationType;
+  @ApiProperty({ enum: EventLocationType, example: EventLocationType.PHYSICAL })
+  type!: EventLocationType;
 
-  @ApiPropertyOptional({ description: 'Venue name' })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  @ApiPropertyOptional({ example: 'Centro de Convenciones de Lima' })
   venue?: string;
 
-  @ApiProperty({ description: 'Event address' })
-  @ValidateNested()
-  @Type(() => AddressDto)
-  address: AddressDto;
-
-  @ApiPropertyOptional({ description: 'Virtual meeting details' })
   @IsOptional()
   @ValidateNested()
-  @Type(() => VirtualDetailsDto)
-  virtualDetails?: VirtualDetailsDto;
+  @Type(() => EventAddressCreateDto)
+  @ApiPropertyOptional({ type: EventAddressCreateDto })
+  address?: EventAddressCreateDto;
 
-  @ApiProperty({ description: 'Maximum capacity', minimum: 1 })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EventVirtualDetailsCreateDto)
+  @ApiPropertyOptional({ type: EventVirtualDetailsCreateDto })
+  virtualDetails?: EventVirtualDetailsCreateDto;
+
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  capacity: number;
+  @ApiPropertyOptional({ example: 350 })
+  capacity?: number;
 }
 
-class AgendaItemDto {
-  @ApiProperty({ description: 'Agenda item title' })
+export class EventAgendaItemCreateDto {
   @IsString()
-  title: string;
+  @IsNotEmpty()
+  @MaxLength(140)
+  @ApiProperty({ example: 'Apertura y bienvenida' })
+  title!: string;
 
-  @ApiPropertyOptional({ description: 'Agenda item description' })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
+  @ApiPropertyOptional({ example: 'Presentación de los objetivos del evento.' })
   description?: string;
 
-  @ApiProperty({ description: 'Start time' })
-  @IsDateString()
-  startTime: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiProperty({ example: '2025-10-01T14:00:00.000Z' })
+  startTime!: Date;
 
-  @ApiProperty({ description: 'End time' })
-  @IsDateString()
-  endTime: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiProperty({ example: '2025-10-01T14:30:00.000Z' })
+  endTime!: Date;
 
-  @ApiPropertyOptional({ description: 'Speaker ID' })
   @IsOptional()
   @IsMongoId()
+  @ApiPropertyOptional({ example: '66b1a0c0d1e2f3a4b5c6d7e8' })
   speakerId?: string;
 
-  @ApiPropertyOptional({
-    description: 'Item type',
-    enum: AgendaItemType,
-  })
-  @IsOptional()
   @IsEnum(AgendaItemType)
-  type?: AgendaItemType;
+  @ApiProperty({ enum: AgendaItemType, example: AgendaItemType.PRESENTATION })
+  type!: AgendaItemType;
 }
 
-class RegistrationSettingsDto {
-  @ApiPropertyOptional({ description: 'Registration is open', default: true })
-  @IsOptional()
+export class EventRegistrationCreateDto {
   @IsBoolean()
-  isOpen?: boolean;
+  @ApiProperty({ example: true })
+  isOpen!: boolean;
 
-  @ApiPropertyOptional({ description: 'Registration opens at' })
   @IsOptional()
-  @IsDateString()
-  opensAt?: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiPropertyOptional({ example: '2025-09-01T00:00:00.000Z' })
+  opensAt?: Date;
 
-  @ApiPropertyOptional({ description: 'Registration closes at' })
   @IsOptional()
-  @IsDateString()
-  closesAt?: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiPropertyOptional({ example: '2025-09-30T23:59:59.000Z' })
+  closesAt?: Date;
 
-  @ApiPropertyOptional({ description: 'Requires approval', default: false })
-  @IsOptional()
   @IsBoolean()
-  requiresApproval?: boolean;
+  @ApiProperty({ example: false })
+  requiresApproval!: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Max attendees per registration',
-    default: 1,
-  })
-  @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(20)
-  maxAttendeesPerRegistration?: number;
+  @ApiProperty({ example: 1 })
+  maxAttendeesPerRegistration!: number;
 
-  @ApiPropertyOptional({ description: 'Enable waitlist', default: false })
-  @IsOptional()
   @IsBoolean()
-  waitlistEnabled?: boolean;
+  @ApiProperty({ example: false })
+  waitlistEnabled!: boolean;
 }
 
-class EventSettingsDto {
-  @ApiPropertyOptional({ description: 'Private event', default: false })
-  @IsOptional()
+export class EventSettingsCreateDto {
   @IsBoolean()
-  isPrivate?: boolean;
+  @ApiProperty({ example: false })
+  isPrivate!: boolean;
 
-  @ApiPropertyOptional({ description: 'Requires invitation', default: false })
-  @IsOptional()
   @IsBoolean()
-  requiresInvitation?: boolean;
+  @ApiProperty({ example: false })
+  requiresInvitation!: boolean;
 
-  @ApiPropertyOptional({ description: 'Minimum age requirement' })
   @IsOptional()
   @IsNumber()
   @Min(0)
-  @Max(100)
+  @ApiPropertyOptional({ example: 18 })
   ageRestriction?: number;
 
-  @ApiPropertyOptional({ description: 'Dress code' })
   @IsOptional()
   @IsString()
+  @MaxLength(80)
+  @ApiPropertyOptional({ example: 'Formal' })
   dresscode?: string;
 
-  @ApiPropertyOptional({ description: 'Special instructions' })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
+  @ApiPropertyOptional({ example: 'Ingresar por puerta 3. Traer DNI.' })
   specialInstructions?: string;
 }
 
 export class CreateEventDto {
-  @ApiProperty({ description: 'Event title' })
   @IsString()
-  title: string;
+  @IsNotEmpty()
+  @MaxLength(140)
+  @ApiProperty({ example: 'Congreso Internacional de Gastroenterología 2025' })
+  title!: string;
 
-  @ApiProperty({ description: 'Event description' })
   @IsOptional()
   @IsString()
-  description: string;
+  @MaxLength(2000)
+  @ApiPropertyOptional({
+    example: 'Evento anual con expertos internacionales.',
+  })
+  description?: string;
 
-  @ApiPropertyOptional({ description: 'Short description for listings' })
   @IsOptional()
   @IsString()
+  @MaxLength(240)
+  @ApiPropertyOptional({ example: 'Expertos en hepatología, NAFLD y NASH' })
   shortDescription?: string;
 
-  @ApiProperty({ description: 'Company ID' })
   @IsMongoId()
-  companyId: string;
+  @ApiProperty({ example: '66bfca24c3baf17b08c9b111' })
+  companyId!: string;
 
-  @ApiProperty({ description: 'Event type', enum: EventType })
   @IsEnum(EventType)
-  type: EventType;
+  @ApiProperty({ enum: EventType, example: EventType.CONFERENCE })
+  type!: EventType;
 
-  @ApiProperty({ description: 'Event start date and time' })
-  @IsDateString()
-  startDate: string;
+  @IsEnum(EventStatus)
+  @ApiProperty({ enum: EventStatus, example: EventStatus.DRAFT })
+  eventStatus!: EventStatus;
 
-  @ApiProperty({ description: 'Event end date and time' })
-  @IsDateString()
-  endDate: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiProperty({ example: '2025-10-01T13:00:00.000Z' })
+  startDate!: Date;
 
-  @ApiPropertyOptional({ description: 'Timezone (e.g., "America/Lima")' })
+  @IsDate()
+  @Type(() => Date)
+  @ApiProperty({ example: '2025-10-02T23:59:59.000Z' })
+  endDate!: Date;
+
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({ example: 'America/Lima' })
   timezone?: string;
 
-  @ApiPropertyOptional({ description: 'All-day event', default: false })
-  @IsOptional()
   @IsBoolean()
-  isAllDay?: boolean;
+  @ApiProperty({ example: false })
+  isAllDay!: boolean;
 
-  @ApiProperty({ description: 'Event location details' })
+  @ApiProperty({ type: EventLocationCreateDto })
   @ValidateNested()
-  @Type(() => EventLocationDto)
-  location: EventLocationDto;
+  @Type(() => EventLocationCreateDto)
+  location: EventLocationCreateDto;
 
-  @ApiPropertyOptional({ description: 'Speaker IDs' })
   @IsOptional()
   @IsArray()
   @IsMongoId({ each: true })
+  @ApiProperty({ type: [String], example: ['66b1a0c0d1e2f3a4b5c6d7e8'] })
   speakers?: string[];
 
-  @ApiPropertyOptional({ description: 'Event agenda' })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => AgendaItemDto)
-  agenda?: AgendaItemDto[];
+  @Type(() => EventAgendaItemCreateDto)
+  @ApiPropertyOptional({ type: [EventAgendaItemCreateDto] })
+  agenda?: EventAgendaItemCreateDto[];
 
-  @ApiPropertyOptional({ description: 'Registration settings' })
   @IsOptional()
   @ValidateNested()
-  @Type(() => RegistrationSettingsDto)
-  registration?: RegistrationSettingsDto;
+  @Type(() => EventRegistrationCreateDto)
+  @ApiProperty({ type: EventRegistrationCreateDto })
+  registration?: EventRegistrationCreateDto;
 
-  @ApiPropertyOptional({ description: 'Featured image URL' })
   @IsOptional()
-  @IsString()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/events/abc.jpg' })
   featuredImage?: string;
 
-  @ApiPropertyOptional({ description: 'Additional image URLs' })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsUrl({}, { each: true })
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['https://cdn.example.com/1.jpg'],
+  })
   images?: string[];
 
-  @ApiPropertyOptional({ description: 'Video URL' })
   @IsOptional()
-  @IsString()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://youtu.be/xyz' })
   videoUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Event tags' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @ApiPropertyOptional({ type: [String], example: ['gastro', 'hepatología'] })
   tags?: string[];
 
-  @ApiPropertyOptional({ description: 'Event categories' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @ApiPropertyOptional({ type: [String], example: ['salud', 'medicina'] })
   categories?: string[];
 
-  @ApiPropertyOptional({
-    description: 'URL slug (auto-generated if not provided)',
-  })
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({ example: 'congreso-gastro-2025' })
   slug?: string;
 
-  @ApiPropertyOptional({ description: 'Event settings' })
+  @ApiPropertyOptional({ type: EventSettingsCreateDto })
   @IsOptional()
   @ValidateNested()
-  @Type(() => EventSettingsDto)
-  settings?: EventSettingsDto;
+  @Type(() => EventSettingsCreateDto)
+  settings?: EventSettingsCreateDto;
 }

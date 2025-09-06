@@ -10,7 +10,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethod } from '../../common/enums/payment-method.enum';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 import { DocumentType } from 'src/common/enums/document-type.enum';
 
 export class CardTokenDto {
@@ -94,12 +94,12 @@ export class CreatePaymentDto {
 
   @ApiPropertyOptional({
     description: 'Currency',
-    enum: CurrencyCode,
-    default: CurrencyCode.PEN,
+    enum: Currency,
+    default: Currency.PEN,
   })
   @IsOptional()
-  @IsEnum(CurrencyCode)
-  currency?: CurrencyCode;
+  @IsEnum(Currency)
+  currency?: Currency;
 
   @ApiProperty({ description: 'Customer information' })
   @ValidateNested()

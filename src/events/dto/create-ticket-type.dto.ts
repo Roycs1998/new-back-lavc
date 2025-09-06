@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CurrencyCode } from 'src/common/enums/currency.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 
 class PricingTierDto {
   @ApiProperty({ description: 'Tier name (e.g., "Early Bird", "Regular")' })
@@ -114,11 +114,11 @@ export class CreateTicketTypeDto {
 
   @ApiPropertyOptional({
     description: 'Currency',
-    enum: CurrencyCode,
-    default: CurrencyCode.PEN,
+    enum: Currency,
+    default: Currency.PEN,
   })
   @IsOptional()
-  @IsEnum(CurrencyCode)
+  @IsEnum(Currency)
   currency?: string;
 
   @ApiProperty({ description: 'Total quantity available', minimum: 1 })

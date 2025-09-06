@@ -3,9 +3,7 @@ import { HydratedDocument, Types } from 'mongoose';
 import { CompanyType } from 'src/common/enums/company-type.enum';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
-export type CompanyDocument = HydratedDocument<Company> & {
-  _id: Types.ObjectId;
-};
+export type CompanyDocument = HydratedDocument<Company>;
 
 @Schema({ _id: false })
 export class Address {

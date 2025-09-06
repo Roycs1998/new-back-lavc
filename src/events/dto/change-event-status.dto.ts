@@ -34,6 +34,5 @@ export class ChangeEventStatusDto {
   @IsOptional()
   @IsString()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  // Permite enviarlo vacío o no enviarlo al aprobar, pero lo ignoraremos en el servicio
   private _ignoreWhenNotRejected?: string;
 }
