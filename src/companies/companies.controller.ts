@@ -29,96 +29,108 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import { StatusDto } from 'src/common/dto/status.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
+import { CompanyDto } from './dto/company.dto';
+import { CompanyPaginatedDto } from './dto/company-pagination.dto';
+import { ChangeCompanyStatusDto } from './dto/change-company-status.dto';
 
-@ApiTags('Companies')
+@ApiTags('Empresas')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('companies')
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Create a new company' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 201, description: 'Company created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  create(@Body() dto: CreateCompanyDto) {
+  @ApiOperation({ summary: 'Crear una empresa' })
+  @ApiResponse({
+    status: 201,
+    description: 'Empresa creada correctamente',
+    type: CompanyDto,
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos o duplicados' })
+  create(@Body() dto: CreateCompanyDto): Promise<CompanyDto> {
     return this.companiesService.create(dto);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.USER)
-  @ApiOperation({ summary: 'Get companies (paginated + filters)' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Companies retrieved successfully' })
-  findAll(@Query() filter: CompanyFilterDto) {
+  @Roles(UserRole.PLATFORM_ADMIN)
+  @ApiOperation({ summary: 'Listar empresas (filtros + paginación)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Listado de empresas obtenido correctamente',
+    type: CompanyPaginatedDto,
+  })
+  findAll(@Query() filter: CompanyFilterDto): Promise<CompanyPaginatedDto> {
     return this.companiesService.findAll(filter);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.USER)
-  @ApiOperation({ summary: 'Get company by ID' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Company found' })
-  @ApiResponse({ status: 404, description: 'Company not found' })
-  findOne(@Param('id', ParseObjectIdPipe) id: string) {
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Obtener una empresa por ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Empresa encontrada',
+    type: CompanyDto,
+  })
+  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
+  findOne(@Param('id', ParseObjectIdPipe) id: string): Promise<CompanyDto> {
     return this.companiesService.findOne(id);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Update company by ID' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Company updated successfully' })
-  @ApiResponse({ status: 404, description: 'Company not found' })
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Actualizar una empresa por ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Empresa actualizada',
+    type: CompanyDto,
+  })
+  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: UpdateCompanyDto,
-  ) {
+  ): Promise<CompanyDto> {
     return this.companiesService.update(id, dto);
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Change company status' })
-  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Cambiar estado de una empresa (ACTIVE/INACTIVE/DELETED)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Company status updated successfully',
+    description: 'Estado actualizado',
+    type: CompanyDto,
   })
-  @ApiResponse({ status: 404, description: 'Company not found' })
+  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
-    @Body() dto: StatusDto,
+    @Body() dto: ChangeCompanyStatusDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<CompanyDto> {
     return this.companiesService.changeStatus(
       id,
       dto.entityStatus,
-      currentUser.id,
+      currentUser?.id,
     );
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Soft delete company by ID' })
-  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Eliminar lógicamente una empresa por ID' })
   @ApiResponse({
     status: 204,
-    description: 'Company soft-deleted successfully',
+    description: 'Empresa eliminada (soft delete) correctamente',
   })
-  @ApiResponse({ status: 404, description: 'Company not found' })
+  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   async remove(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
-    await this.companiesService.softDelete(id, currentUser.id);
+  ): Promise<void> {
+    await this.companiesService.softDelete(id, currentUser?.id);
   }
 }

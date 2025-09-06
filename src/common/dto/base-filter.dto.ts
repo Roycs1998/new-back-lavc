@@ -17,7 +17,6 @@ export class BaseFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filtrar por fecha de creación (desde)',
-    example: '2024-01-01',
     format: 'date',
   })
   @IsOptional()
@@ -29,7 +28,6 @@ export class BaseFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filtrar por fecha de creación (hasta)',
-    example: '2024-12-31',
     format: 'date',
   })
   @IsOptional()
@@ -41,7 +39,6 @@ export class BaseFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Término de búsqueda aplicado a campos de texto',
-    example: 'juan',
   })
   @IsOptional()
   @IsString({ message: 'El parámetro de búsqueda debe ser texto' })

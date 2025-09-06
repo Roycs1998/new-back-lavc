@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 
@@ -9,8 +10,6 @@ import { InjectModel } from '@nestjs/mongoose';
 
 import { Model, SortOrder, Types } from 'mongoose';
 
-import { CompanyType } from 'src/common/enums/company-type.enum';
-import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -18,10 +17,10 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyFilterDto } from './dto/company-filter.dto';
 
 import { Company, CompanyDocument } from './entities/company.entity';
-import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 import { escapeRegex } from 'src/utils/escapeRegex';
-import { asDate } from 'src/utils/asDate';
-import { normalizeEmail } from 'src/utils/normalizeEmail';
+import { CompanyDto } from './dto/company.dto';
+import { plainToInstance } from 'class-transformer';
+import { CompanyPaginatedDto } from './dto/company-pagination.dto';
 
 @Injectable()
 export class CompaniesService {
@@ -29,106 +28,147 @@ export class CompaniesService {
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
   ) {}
 
-  async create(dto: CreateCompanyDto): Promise<CompanyDocument> {
-    try {
-      dto.contactEmail = normalizeEmail(dto.contactEmail);
-      const doc = new this.companyModel(dto);
-      return await doc.save();
-    } catch (error: any) {
-      if (error?.code === 11000) {
-        throw new BadRequestException('Contact email already exists');
-      }
-      throw error;
+  private toObjectId(id: string): Types.ObjectId {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('El ID proporcionado no es válido');
+    }
+    return new Types.ObjectId(id);
+  }
+
+  private toDto(doc: CompanyDocument): CompanyDto {
+    return plainToInstance(CompanyDto, doc.toJSON(), {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private async ensureEmailIsAvailable(
+    email: string,
+    excludeId?: Types.ObjectId,
+  ): Promise<void> {
+    const where: Record<string, any> = {
+      contactEmail: this.normalizeEmail(email),
+      entityStatus: { $ne: EntityStatus.DELETED },
+    };
+    if (excludeId) where._id = { $ne: excludeId };
+
+    const exists = await this.companyModel.exists(where).lean();
+    if (exists) {
+      throw new ConflictException(
+        'Ya existe una empresa registrada con este correo electrónico',
+      );
     }
   }
 
-  async findAll(
-    filterDto: CompanyFilterDto,
-  ): Promise<PaginationMetaDto<CompanyDocument>> {
+  async create(dto: CreateCompanyDto): Promise<CompanyDto> {
+    try {
+      const contactEmail = this.normalizeEmail(dto.contactEmail);
+      const name = dto.name?.trim();
+
+      if (contactEmail) {
+        await this.ensureEmailIsAvailable(contactEmail);
+      }
+
+      const payload = {
+        ...dto,
+        name,
+        contactEmail,
+        entityStatus: EntityStatus.ACTIVE,
+      };
+
+      const created = await this.companyModel.create(payload);
+      return this.toDto(created);
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error?.message ?? 'No se pudo crear la empresa',
+      );
+    }
+  }
+
+  private isValidDate(input?: unknown): input is string {
+    if (typeof input !== 'string') return false;
+    const d = new Date(input);
+    return !Number.isNaN(d.getTime());
+  }
+
+  private iRegex(term: string) {
+    return { $regex: escapeRegex(term), $options: 'i' as const };
+  }
+
+  async findAll(filter: CompanyFilterDto): Promise<CompanyPaginatedDto> {
     const {
       page = 1,
       limit = 10,
       sort = 'createdAt',
       order = 'desc',
-      search,
-      entityStatus,
       type,
       country,
       city,
+      search,
       createdFrom,
       createdTo,
-    } = filterDto ?? {};
+      entityStatus,
+    } = (filter ?? {}) as any;
 
-    const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 100);
-    const safePage = Math.max(Number(page) || 1, 1);
-    const skip = (safePage - 1) * safeLimit;
+    const q: Record<string, any> = {};
 
-    const filter: Record<string, any> = {};
-
-    if (entityStatus) filter.entityStatus = entityStatus;
-    else filter.entityStatus = { $ne: EntityStatus.DELETED };
-
-    if (type) filter.type = type as CompanyType;
-
-    if (country?.trim()) {
-      filter['address.country'] = {
-        $regex: `^${escapeRegex(country.trim())}$`,
-        $options: 'i',
-      };
-    }
-    if (city?.trim()) {
-      filter['address.city'] = {
-        $regex: `^${escapeRegex(city.trim())}$`,
-        $options: 'i',
-      };
+    if (entityStatus) {
+      q.entityStatus = entityStatus;
+    } else {
+      q.entityStatus = { $ne: EntityStatus.DELETED };
     }
 
-    const from = asDate(createdFrom);
-    const to = asDate(createdTo);
-    if (from || to) {
-      filter.createdAt = {};
-      if (from) filter.createdAt.$gte = from;
-      if (to) filter.createdAt.$lte = to;
-    }
+    if (type) q.type = type;
 
-    if (search?.trim()) {
-      const q = escapeRegex(search.trim());
-      filter.$or = [
-        { name: { $regex: q, $options: 'i' } },
-        { description: { $regex: q, $options: 'i' } },
-        { contactEmail: { $regex: q, $options: 'i' } },
+    if (country) q['address.country'] = this.iRegex(String(country));
+    if (city) q['address.city'] = this.iRegex(String(city));
+
+    if (typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      const rx = this.iRegex(term);
+      q.$or = [
+        { name: rx },
+        { description: rx },
+        { contactName: rx },
+        { contactEmail: rx },
+        { contactPhone: rx },
+        { 'address.city': rx },
+        { 'address.country': rx },
       ];
     }
 
-    const SORT_WHITELIST = new Set([
-      'createdAt',
-      'updatedAt',
-      'name',
-      'contactEmail',
-      'type',
-      'entityStatus',
-      'commissionRate',
-      'approvedAt',
-    ] as const);
-    const sortKey = SORT_WHITELIST.has(sort as any) ? sort : 'createdAt';
-    const sortOptions: Record<string, SortOrder> = {
+    if (this.isValidDate(createdFrom) || this.isValidDate(createdTo)) {
+      q.createdAt = {};
+      if (this.isValidDate(createdFrom))
+        q.createdAt.$gte = new Date(createdFrom!);
+      if (this.isValidDate(createdTo)) q.createdAt.$lte = new Date(createdTo!);
+    }
+
+    const perPage = Math.min(100, Math.max(1, Number(limit)));
+    const safePage = Math.max(1, Number(page));
+    const skip = (safePage - 1) * perPage;
+
+    const sortKey = ['name', 'type', 'createdAt', 'updatedAt'].includes(
+      String(sort),
+    )
+      ? String(sort)
+      : 'createdAt';
+    const sortSpec: Record<string, SortOrder> = {
       [sortKey]: order === 'asc' ? 1 : -1,
     };
 
-    const [data, totalItems] = await Promise.all([
-      this.companyModel
-        .find(filter)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(safeLimit)
-        .exec(),
-      this.companyModel.countDocuments(filter),
+    const [docs, totalItems] = await Promise.all([
+      this.companyModel.find(q).sort(sortSpec).skip(skip).limit(perPage).exec(),
+      this.companyModel.countDocuments(q).exec(),
     ]);
 
-    const totalPages = totalItems ? Math.ceil(totalItems / safeLimit) : 1;
+    const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
 
     return {
-      data,
+      data: docs.map((d) => this.toDto(d)),
       totalItems,
       totalPages,
       currentPage: safePage,
@@ -137,97 +177,107 @@ export class CompaniesService {
     };
   }
 
-  async findOne(id: string, includeDeleted = false): Promise<CompanyDocument> {
-    const query: any = { _id: id };
-    if (!includeDeleted) query.entityStatus = { $ne: EntityStatus.DELETED };
-
-    const company = await this.companyModel.findOne(query).exec();
-    if (!company)
-      throw new NotFoundException(`Company with ID ${id} not found`);
-    return company;
-  }
-
-  async findByContactEmail(
-    contactEmail: string,
-  ): Promise<CompanyDocument | null> {
-    return this.companyModel
-      .findOne({ contactEmail: normalizeEmail(contactEmail) })
+  async findOne(id: string): Promise<CompanyDto> {
+    const _id = this.toObjectId(id);
+    const doc = await this.companyModel
+      .findOne({ _id, entityStatus: { $ne: EntityStatus.DELETED } })
       .exec();
+
+    if (!doc) throw new NotFoundException('Empresa no encontrada');
+    return this.toDto(doc);
   }
 
-  async update(id: string, dto: UpdateCompanyDto): Promise<CompanyDocument> {
+  async update(id: string, dto: UpdateCompanyDto): Promise<CompanyDto> {
     try {
-      if (dto.contactEmail) dto.contactEmail = normalizeEmail(dto.contactEmail);
+      const _id = this.toObjectId(id);
 
       const existing = await this.companyModel
-        .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
-        .lean();
-      if (!existing) throw new NotFoundException('Company not found');
+        .findOne({ _id, entityStatus: { $ne: EntityStatus.DELETED } })
+        .select({ _id: 1, contactEmail: 1 })
+        .exec();
 
-      if (dto.contactEmail && dto.contactEmail !== existing.contactEmail) {
-        const dup = await this.companyModel.exists({
-          _id: { $ne: id },
-          contactEmail: dto.contactEmail,
-          entityStatus: { $ne: EntityStatus.DELETED },
-        });
-        if (dup) throw new ConflictException('Contact email already exists');
+      if (!existing) {
+        throw new NotFoundException('Empresa no encontrada');
       }
 
-      const $set = sanitizeFlat(dto);
-      if (Object.keys($set).length === 0) {
-        const doc = await this.companyModel.findById(id).exec();
-        if (!doc) throw new NotFoundException('Company not found');
-        return doc;
+      const nextEmail = this.normalizeEmail(dto.contactEmail ?? '');
+
+      if (
+        nextEmail &&
+        nextEmail !== this.normalizeEmail(existing.contactEmail as any)
+      ) {
+        await this.ensureEmailIsAvailable(nextEmail, _id);
       }
+
+      const $set: Record<string, any> = {
+        ...dto,
+        ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.contactEmail ? { contactEmail: nextEmail } : {}),
+      };
 
       const updated = await this.companyModel
         .findOneAndUpdate(
-          { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
-          { $set, $currentDate: { updatedAt: true } },
+          { _id, entityStatus: { $ne: EntityStatus.DELETED } },
+          { $set },
           { new: true, runValidators: true, context: 'query' },
         )
         .exec();
 
-      if (!updated) throw new NotFoundException('Company not found');
-      return updated;
-    } catch (error: any) {
-      if (error?.code === 11000) {
-        throw new BadRequestException('Contact email already exists');
+      if (!updated) {
+        throw new NotFoundException('Empresa no encontrada');
       }
-      throw error;
+
+      return this.toDto(updated);
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error?.message ?? 'No se pudo actualizar la empresa',
+      );
     }
   }
 
   async changeStatus(
     id: string,
-    entityStatus: EntityStatus,
+    status: EntityStatus,
     changedBy?: string,
-  ): Promise<CompanyDocument> {
+  ): Promise<CompanyDto> {
+    const _id = this.toObjectId(id);
+
+    const match: Record<string, any> = { _id };
+    if (status === EntityStatus.DELETED) {
+      match.entityStatus = { $ne: EntityStatus.DELETED };
+    }
+
     const update: any = {
-      $set: { entityStatus },
-      $currentDate: { updatedAt: true },
+      $set: {
+        entityStatus: status,
+        ...(changedBy ? { updatedBy: this.toObjectId(changedBy) } : {}),
+      },
+      $currentDate: { updatedAt: true as true },
     };
 
-    if (entityStatus === EntityStatus.DELETED) {
-      update.$currentDate.deletedAt = true;
-      if (changedBy) update.$set.deletedBy = new Types.ObjectId(changedBy);
+    if (status === EntityStatus.DELETED) {
+      if (changedBy) update.$set.deletedBy = this.toObjectId(changedBy);
+      update.$currentDate.deletedAt = true as true; // registra fecha/hora de eliminación
     } else {
       update.$unset = { deletedAt: '', deletedBy: '' };
     }
 
     const doc = await this.companyModel
-      .findOneAndUpdate({ _id: id }, update, {
+      .findOneAndUpdate(match, update, {
         new: true,
         runValidators: true,
         context: 'query',
       })
       .exec();
 
-    if (!doc) throw new NotFoundException('Company not found');
-    return doc;
+    if (!doc) {
+      throw new NotFoundException('Empresa no encontrada');
+    }
+
+    return this.toDto(doc);
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<CompanyDocument> {
+  async softDelete(id: string, deletedBy?: string): Promise<CompanyDto> {
     return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
   }
 }

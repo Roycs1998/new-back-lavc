@@ -4,6 +4,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -61,7 +62,7 @@ export class UsersService {
 
     const password = await bcrypt.hash(dto.password, 12);
 
-    const user = new this.userModel({
+    const created = await this.userModel.create({
       ...dto,
       email,
       password,
@@ -70,7 +71,16 @@ export class UsersService {
       entityStatus: EntityStatus.ACTIVE,
     });
 
-    return this.toDto(await user.save());
+    const user = await this.userModel
+      .findById(created._id)
+      .populate([{ path: 'person' }, { path: 'company' }])
+      .exec();
+
+    if (!user) {
+      throw new InternalServerErrorException('No se pudo crear el usuario.');
+    }
+
+    return this.toDto(user);
   }
 
   async createUserWithPerson(dto: CreateUserWithPersonDto): Promise<UserDto> {
@@ -93,8 +103,7 @@ export class UsersService {
 
     const populatedUser = await this.userModel
       .findById(user.id)
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!populatedUser)
@@ -229,8 +238,7 @@ export class UsersService {
 
     const user = await this.userModel
       .findOne(filter)
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!user)
@@ -278,8 +286,7 @@ export class UsersService {
         { $set, $currentDate: { updatedAt: true } },
         { new: true, runValidators: true, context: 'query' },
       )
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!updated) throw new NotFoundException('Usuario no encontrado');
@@ -299,8 +306,7 @@ export class UsersService {
         },
         { new: true },
       )
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -327,8 +333,7 @@ export class UsersService {
         },
         { new: true },
       )
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -358,8 +363,7 @@ export class UsersService {
         runValidators: true,
         context: 'query',
       })
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!doc) throw new NotFoundException('Usuario no encontrado');
@@ -380,8 +384,7 @@ export class UsersService {
 
     const user = await this.userModel
       .findOne(filter)
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
 
     if (!user) {
@@ -468,8 +471,7 @@ export class UsersService {
         entityStatus: { $ne: EntityStatus.DELETED },
       })
       .select('+password')
-      .populate('personId')
-      .populate('companyId')
+      .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
   }
 }

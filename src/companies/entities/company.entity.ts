@@ -37,7 +37,7 @@ export const CompanySubscriptionSchema =
 @Schema({
   collection: 'companies',
   versionKey: false,
-  id: false,
+  id: true,
   timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
   toJSON: { virtuals: true },
   toObject: { virtuals: true },
@@ -89,12 +89,6 @@ export class Company {
     type: CompanySubscriptionSchema,
   })
   subscription?: CompanySubscription;
-
-  @Prop({ type: Types.ObjectId, ref: 'User' })
-  approvedBy?: Types.ObjectId;
-
-  @Prop()
-  approvedAt?: Date;
 
   @Prop({
     type: String,

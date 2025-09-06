@@ -14,42 +14,68 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CompanyType } from 'src/common/enums/company-type.enum';
 
 class AddressDto {
-  @ApiPropertyOptional({ description: 'Street address' })
+  @ApiPropertyOptional({
+    description: 'Calle o avenida (dirección fiscal o comercial)',
+    example: 'Av. Arequipa 1234',
+  })
   @IsOptional()
   @IsString()
   street?: string;
 
-  @ApiProperty({ description: 'City' })
+  @ApiProperty({
+    description: 'Ciudad',
+    example: 'Lima',
+  })
   @IsString()
-  city: string;
+  city!: string;
 
-  @ApiPropertyOptional({ description: 'State/Province' })
+  @ApiPropertyOptional({
+    description: 'Región/Provincia/Estado',
+    example: 'Lima',
+  })
   @IsOptional()
   @IsString()
   state?: string;
 
-  @ApiProperty({ description: 'Country' })
+  @ApiProperty({
+    description: 'País',
+    example: 'Perú',
+  })
   @IsString()
-  country: string;
+  country!: string;
 
-  @ApiPropertyOptional({ description: 'ZIP/Postal code' })
+  @ApiPropertyOptional({
+    description: 'Código postal',
+    example: '15046',
+  })
   @IsOptional()
   @IsString()
   zipCode?: string;
 }
 
 class CompanySettingsDto {
-  @ApiPropertyOptional({ description: 'Can upload speakers', default: true })
+  @ApiPropertyOptional({
+    description: 'Permite subir ponentes (speakers) a la plataforma',
+    example: true,
+    default: true,
+  })
   @IsOptional()
   @IsBoolean()
   canUploadSpeakers?: boolean;
 
-  @ApiPropertyOptional({ description: 'Can create events', default: true })
+  @ApiPropertyOptional({
+    description: 'Permite crear eventos en la plataforma',
+    example: true,
+    default: true,
+  })
   @IsOptional()
   @IsBoolean()
   canCreateEvents?: boolean;
 
-  @ApiPropertyOptional({ description: 'Maximum events per month' })
+  @ApiPropertyOptional({
+    description: 'Número máximo de eventos que la empresa puede crear por mes',
+    example: 10,
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -57,43 +83,65 @@ class CompanySettingsDto {
 }
 
 export class CreateCompanyDto {
-  @ApiProperty({ description: 'Company name' })
+  @ApiProperty({
+    description: 'Nombre comercial o razón social de la empresa',
+    example: 'Acme Events S.A.C.',
+  })
   @IsString()
-  name: string;
+  name!: string;
 
-  @ApiPropertyOptional({ description: 'Company description' })
+  @ApiPropertyOptional({
+    description: 'Descripción breve de la empresa',
+    example: 'Organizador de eventos y conferencias tecnológicas.',
+  })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ description: 'Company logo URL' })
+  @ApiPropertyOptional({
+    description: 'URL del logotipo de la empresa',
+    example: 'https://cdn.example.com/logos/acme.png',
+  })
   @IsOptional()
   @IsString()
   logo?: string;
 
-  @ApiPropertyOptional({ description: 'Company website' })
+  @ApiPropertyOptional({
+    description: 'Sitio web oficial de la empresa',
+    example: 'https://www.acme-events.com',
+  })
   @IsOptional()
   @IsString()
   website?: string;
 
-  @ApiProperty({ description: 'Contact email address' })
+  @ApiProperty({
+    description: 'Correo electrónico de contacto principal',
+    example: 'contacto@acme-events.com',
+  })
   @IsEmail()
-  contactEmail: string;
+  contactEmail!: string;
 
-  @ApiPropertyOptional({ description: 'Contact phone number' })
+  @ApiPropertyOptional({
+    description: 'Teléfono de contacto',
+    example: '+51 999 999 999',
+  })
   @IsOptional()
   @IsString()
   contactPhone?: string;
 
-  @ApiPropertyOptional({ description: 'Company address' })
+  @ApiPropertyOptional({
+    description: 'Dirección de la empresa',
+    type: () => AddressDto,
+  })
   @IsOptional()
   @ValidateNested()
   @Type(() => AddressDto)
   address?: AddressDto;
 
   @ApiPropertyOptional({
-    description: 'Company type',
+    description: 'Tipo de empresa',
     enum: CompanyType,
+    example: CompanyType.EVENT_ORGANIZER,
     default: CompanyType.EVENT_ORGANIZER,
   })
   @IsOptional()
@@ -101,9 +149,10 @@ export class CreateCompanyDto {
   type?: CompanyType;
 
   @ApiPropertyOptional({
-    description: 'Commission rate (0.00 to 1.00)',
+    description: 'Tasa de comisión aplicada (rango 0.00 a 1.00)',
     minimum: 0,
     maximum: 1,
+    example: 0.15,
     default: 0,
   })
   @IsOptional()
@@ -112,7 +161,10 @@ export class CreateCompanyDto {
   @Max(1)
   commissionRate?: number;
 
-  @ApiPropertyOptional({ description: 'Company settings' })
+  @ApiPropertyOptional({
+    description: 'Configuraciones específicas de la empresa',
+    type: () => CompanySettingsDto,
+  })
   @IsOptional()
   @ValidateNested()
   @Type(() => CompanySettingsDto)

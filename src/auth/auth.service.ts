@@ -54,8 +54,7 @@ export class AuthService {
       return null;
     }
 
-    const { password: _, ...result } = user.toObject();
-    return result;
+    return user;
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
@@ -115,14 +114,12 @@ export class AuthService {
         await this.usersService.createUserWithPerson(userWithPersonDto);
 
       const verificationToken = this.generateVerificationToken();
-      await this.usersService.update(user.id.toString(), {
+      await this.usersService.update(user.id, {
         emailVerificationToken: verificationToken,
       });
 
       return this.login({ email, password });
     } catch (error) {
-      console.log(error, 'AQUI');
-
       throw new BadRequestException(error.message || 'El registro ha fallado.');
     }
   }

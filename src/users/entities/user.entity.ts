@@ -8,7 +8,7 @@ export type UserDocument = User & Document;
 @Schema({
   collection: 'users',
   versionKey: false,
-  id: false,
+  id: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true },
   timestamps: true,
