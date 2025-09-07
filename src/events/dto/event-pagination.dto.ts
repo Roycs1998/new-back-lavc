@@ -3,6 +3,6 @@ import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { EventDto } from './event.dto';
 
 export class EventPaginatedDto extends PaginationMetaDto<EventDto> {
-  @ApiProperty({ type: [EventDto] })
+  @ApiProperty({ type: [EventDto], example: EventDto })
   declare data: EventDto[];
 }

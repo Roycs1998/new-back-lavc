@@ -23,9 +23,12 @@ import { CompanyScope } from 'src/common/decorators/company-scope.decorator';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
@@ -35,141 +38,122 @@ import { EventStatus } from 'src/common/enums/event-status.enum';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { CreateTicketTypeDto } from './dto/create-ticket-type.dto';
 import { ChangeEventStatusDto } from './dto/change-event-status.dto';
+import { EventDto } from './dto/event.dto';
+import { EventPaginatedDto } from './dto/event-pagination.dto';
+import { CancelEventDto } from './dto/cancel-event.dto';
+import { EventStatsDto } from './dto/event-stats.dto';
+import { CompanyEventStatsDto } from './dto/company-event-stats.dto';
+import { TicketTypeDto } from './dto/ticket-type.dto';
 
+@ApiTags('Eventos')
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Create a new event' })
+  @ApiOperation({ summary: 'Crear un nuevo evento' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 201, description: 'Event created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - insufficient permissions',
+  @ApiCreatedResponse({
+    type: EventDto,
+    description: 'Evento creado correctamente',
   })
   create(
     @Body() createEventDto: CreateEventDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<EventDto> {
     return this.eventsService.create(createEventDto, currentUser.id);
   }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
-  @ApiOperation({ summary: 'Get all events with advanced filtering' })
+  @ApiOperation({ summary: 'Listar eventos con filtros avanzados (privado)' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Events retrieved successfully' })
+  @ApiOkResponse({
+    type: EventPaginatedDto,
+    description: 'Eventos obtenidos correctamente',
+  })
   findAll(
     @Query() filterDto: EventFilterDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<EventPaginatedDto> {
     return this.eventsService.findAll(filterDto, currentUser);
   }
 
   @Get('public')
   @Public()
-  @ApiOperation({ summary: 'Get published events (public access)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Published events retrieved successfully',
+  @ApiOperation({ summary: 'Listar eventos publicados (acceso público)' })
+  @ApiOkResponse({
+    type: EventPaginatedDto,
+    description: 'Eventos publicados obtenidos correctamente',
   })
-  findAllPublic(@Query() filterDto: EventFilterDto) {
+  findAllPublic(
+    @Query() filterDto: EventFilterDto,
+  ): Promise<EventPaginatedDto> {
     const publicFilter = { ...filterDto, eventStatus: EventStatus.PUBLISHED };
     return this.eventsService.findAll(publicFilter);
-  }
-
-  @Get('company/:companyId/stats')
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Get event statistics for company' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Company event statistics retrieved successfully',
-  })
-  getCompanyStats(@Param('companyId', ParseObjectIdPipe) companyId: string) {
-    return this.eventsService.getCompanyEventStats(companyId);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
-  @ApiOperation({ summary: 'Get event by ID' })
+  @ApiOperation({ summary: 'Obtener un evento por ID' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Event found' })
-  @ApiResponse({ status: 404, description: 'Event not found' })
+  @ApiOkResponse({ type: EventDto, description: 'Evento encontrado' })
   findOne(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<EventDto> {
     return this.eventsService.findOne(id, currentUser);
   }
 
   @Get('slug/:slug')
   @Public()
-  @ApiOperation({ summary: 'Get event by slug (public access)' })
-  @ApiResponse({ status: 200, description: 'Event found' })
-  @ApiResponse({ status: 404, description: 'Event not found' })
-  findBySlug(@Param('slug') slug: string) {
+  @ApiOperation({ summary: 'Obtener un evento por slug (público)' })
+  @ApiOkResponse({ type: EventDto, description: 'Evento encontrado' })
+  findBySlug(@Param('slug') slug: string): Promise<EventDto> {
     return this.eventsService.findBySlug(slug);
-  }
-
-  @Get(':id/stats')
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Get detailed event statistics' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Event statistics retrieved successfully',
-  })
-  getEventStats(@Param('id', ParseObjectIdPipe) id: string) {
-    return this.eventsService.getEventStats(id);
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Update event by ID' })
+  @ApiOperation({ summary: 'Actualizar un evento por ID' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Event updated successfully' })
-  @ApiResponse({ status: 404, description: 'Event not found' })
+  @ApiOkResponse({
+    type: EventDto,
+    description: 'Evento actualizado correctamente',
+  })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() updateEventDto: UpdateEventDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<EventDto> {
     return this.eventsService.update(id, updateEventDto, currentUser.id);
   }
 
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiOperation({ summary: 'Change event status (Platform Admin only)' })
+  @ApiOperation({
+    summary: 'Cambiar el estado del evento (solo Platform Admin)',
+  })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Event status updated successfully',
+  @ApiOkResponse({
+    type: EventDto,
+    description: 'Estado del evento actualizado',
   })
   @ApiBody({
     description:
-      'Cambia el estado del evento. Si es REJECTED debes enviar rejectionReason.',
+      'Cambia el estado del evento. Si se envía REJECTED, debe incluirse "rejectionReason".',
     examples: {
-      approve: {
+      aprobar: {
         summary: 'Aprobar evento',
         value: { eventStatus: EventStatus.APPROVED },
       },
-      reject: {
+      rechazar: {
         summary: 'Rechazar evento',
         value: {
           eventStatus: EventStatus.REJECTED,
@@ -182,7 +166,7 @@ export class EventsController {
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: ChangeEventStatusDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<EventDto> {
     return this.eventsService.changeEventStatus(
       id,
       dto.eventStatus,
@@ -197,9 +181,7 @@ export class EventsController {
   @ApiOperation({
     summary: 'Enviar evento a revisión',
     description:
-      'Transiciona el evento de **DRAFT** a **PENDING_APPROVAL**. ' +
-      'Solo los administradores de la empresa dueña pueden ejecutar esta acción. ' +
-      'Precondiciones: el evento debe estar en estado **DRAFT** y pasar las validaciones básicas (fechas, location, capacity).',
+      'Transiciona el evento de **DRAFT** a **PENDING_APPROVAL** tras validar datos mínimos.',
   })
   @ApiParam({
     name: 'id',
@@ -207,10 +189,7 @@ export class EventsController {
     example: '66d0a1c9b8f2a84f0a3f1123',
   })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Evento enviado a revisión (estado: PENDING_APPROVAL).',
-  })
+  @ApiOkResponse({ type: EventDto, description: 'Evento enviado a revisión' })
   submitForReview(@Param('id', ParseObjectIdPipe) id: string) {
     return this.eventsService.submitForReview(id);
   }
@@ -218,14 +197,9 @@ export class EventsController {
   @Patch(':id/publish')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Publish approved event' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Event published successfully' })
-  @ApiResponse({
-    status: 400,
-    description: 'Event must be approved before publishing',
-  })
+  @ApiOperation({ summary: 'Publicar un evento aprobado' })
+  @ApiOkResponse({ type: EventDto, description: 'Evento publicado' })
   publish(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
@@ -236,22 +210,50 @@ export class EventsController {
   @Patch(':id/cancel')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Cancel event' })
+  @ApiOperation({ summary: 'Cancelar un evento' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Event cancelled successfully' })
+  @ApiOkResponse({ type: EventDto, description: 'Evento cancelado' })
   cancel(
     @Param('id', ParseObjectIdPipe) id: string,
-    @Body('reason') reason: string,
+    @Body() body: CancelEventDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
-    return this.eventsService.cancel(id, currentUser.id, reason);
+  ): Promise<EventDto> {
+    return this.eventsService.cancel(id, currentUser.id, body?.reason);
+  }
+
+  @Get('company/:companyId/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Obtener estadísticas agregadas por empresa' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOkResponse({
+    type: CompanyEventStatsDto,
+    description: 'Estadísticas obtenidas',
+  })
+  getCompanyStats(
+    @Param('companyId', ParseObjectIdPipe) companyId: string,
+  ): Promise<CompanyEventStatsDto> {
+    return this.eventsService.getCompanyEventStats(companyId);
+  }
+
+  @Get(':id/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Obtener estadísticas detalladas de un evento' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOkResponse({
+    type: EventStatsDto,
+    description: 'Estadísticas del evento obtenidas',
+  })
+  getEventStats(
+    @Param('id', ParseObjectIdPipe) id: string,
+  ): Promise<EventStatsDto> {
+    return this.eventsService.getEventStats(id);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
   @ApiOperation({ summary: 'Soft delete event by ID' })
   @ApiBearerAuth('JWT-auth')
   @ApiResponse({ status: 200, description: 'Event soft deleted successfully' })
@@ -264,19 +266,23 @@ export class EventsController {
   }
 
   @Post(':id/ticket-types')
-  @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Create ticket type for event' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 201, description: 'Ticket type created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
+  @ApiOperation({
+    summary: 'Crear tipo de ticket para un evento',
+    description:
+      'Crea un nuevo **Ticket Type** asociado al evento indicado por `:id`.',
+  })
+  @ApiCreatedResponse({
+    type: TicketTypeDto,
+    description: 'Tipo de ticket creado correctamente',
+  })
   createTicketType(
     @Param('id', ParseObjectIdPipe) eventId: string,
     @Body() createTicketTypeDto: CreateTicketTypeDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<TicketTypeDto> {
     return this.eventsService.createTicketType(
       eventId,
       createTicketTypeDto,
@@ -284,30 +290,24 @@ export class EventsController {
     );
   }
 
-  @Get(':id/ticket-types')
-  @Public()
-  @ApiOperation({ summary: 'Get ticket types for event (public access)' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Ticket types retrieved successfully',
-  })
-  getEventTicketTypes(@Param('id', ParseObjectIdPipe) eventId: string) {
-    return this.eventsService.getEventTicketTypes(eventId);
-  }
-
   @Patch('ticket-types/:ticketTypeId')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Update ticket type' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Ticket type updated successfully' })
+  @ApiOperation({
+    summary: 'Actualizar un tipo de ticket',
+    description:
+      'Actualiza los campos permitidos de un **Ticket Type**. No se permite modificar `eventId` ni `sold` directamente.',
+  })
+  @ApiOkResponse({
+    type: TicketTypeDto,
+    description: 'Tipo de ticket actualizado correctamente',
+  })
   updateTicketType(
     @Param('ticketTypeId', ParseObjectIdPipe) ticketTypeId: string,
     @Body() updateData: any,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<TicketTypeDto> {
     return this.eventsService.updateTicketType(
       ticketTypeId,
       updateData,
@@ -316,20 +316,36 @@ export class EventsController {
   }
 
   @Delete('ticket-types/:ticketTypeId')
-  @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @CompanyScope()
-  @ApiOperation({ summary: 'Delete ticket type' })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 204, description: 'Ticket type deleted successfully' })
-  @ApiResponse({
-    status: 400,
-    description: 'Cannot delete ticket type with sales',
+  @ApiOperation({
+    summary: 'Eliminar un tipo de ticket',
+    description:
+      'Elimina un **Ticket Type** siempre que no tenga ventas (`sold = 0`).',
+  })
+  @ApiOkResponse({
+    description: 'Tipo de ticket eliminado correctamente',
   })
   deleteTicketType(
     @Param('ticketTypeId', ParseObjectIdPipe) ticketTypeId: string,
   ) {
     return this.eventsService.deleteTicketType(ticketTypeId);
+  }
+
+  @Get(':id/ticket-types')
+  @Public()
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Listar tipos de ticket de un evento (acceso público)',
+  })
+  @ApiOkResponse({
+    type: [TicketTypeDto],
+    description: 'Tipos de ticket obtenidos correctamente',
+  })
+  getEventTicketTypes(
+    @Param('id', ParseObjectIdPipe) eventId: string,
+  ): Promise<TicketTypeDto[]> {
+    return this.eventsService.getEventTicketTypes(eventId);
   }
 }

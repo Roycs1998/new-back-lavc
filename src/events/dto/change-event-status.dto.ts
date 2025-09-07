@@ -29,10 +29,4 @@ export class ChangeEventStatusDto {
   @IsNotEmpty()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   rejectionReason?: string;
-
-  @ValidateIf((o) => o.eventStatus !== EventStatus.REJECTED)
-  @IsOptional()
-  @IsString()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  private _ignoreWhenNotRejected?: string;
 }

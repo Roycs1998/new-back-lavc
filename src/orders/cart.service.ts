@@ -8,6 +8,10 @@ import { Model, Types } from 'mongoose';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { EventsService } from '../events/events.service';
 import { CartItem, CartItemDocument } from './entities/cart-item.entity';
+import { CartSummaryDto } from './dto/cart-summary.dto';
+import { Currency } from 'src/common/enums/currency.enum';
+import { CartItemDto } from './dto/cart-item.dto';
+import { toDto } from 'src/utils/toDto';
 
 @Injectable()
 export class CartService {
@@ -20,30 +24,27 @@ export class CartService {
     userId: string,
     eventId: string,
     addToCartDto: AddToCartDto,
-  ): Promise<CartItem[]> {
+  ): Promise<CartItemDto[]> {
     const { ticketTypeId, quantity } = addToCartDto;
 
     const event = await this.eventsService.findOne(eventId);
     if (event.eventStatus !== 'published') {
       throw new BadRequestException(
-        'Event is not available for ticket purchase',
+        'El evento no está disponible para la compra de entradas.',
       );
     }
 
     const ticketTypes = await this.eventsService.getEventTicketTypes(eventId);
-    const ticketType = ticketTypes.find(
-      (tt) => tt.toJSON()._id.toString() === ticketTypeId,
-    );
+
+    const ticketType = ticketTypes.find((tt) => tt.id === ticketTypeId);
 
     if (!ticketType) {
-      throw new NotFoundException('Ticket type not found');
+      throw new NotFoundException('No se ha encontrado el tipo de entrada.');
     }
 
-    const ticketTypeJson = ticketType.toJSON();
-
-    if (ticketTypeJson.available < quantity) {
+    if (ticketType.available < quantity) {
       throw new BadRequestException(
-        `Only ${ticketTypeJson.available} tickets available`,
+        `Solo quedan ${ticketType.available} entradas disponibles.`,
       );
     }
 
@@ -54,9 +55,9 @@ export class CartService {
 
     if (existingCartItem) {
       const newQuantity = existingCartItem.quantity + quantity;
-      if (newQuantity > ticketTypeJson.available) {
+      if (newQuantity > ticketType.available) {
         throw new BadRequestException(
-          `Cannot add ${quantity} more tickets. Only ${ticketTypeJson.available - existingCartItem.quantity} additional tickets available`,
+          `No se pueden añadir más entradas. Solo hay disponibles ${ticketType.available - existingCartItem.quantity} entradas adicionales.`,
         );
       }
 
@@ -68,7 +69,7 @@ export class CartService {
         eventId: new Types.ObjectId(eventId),
         ticketTypeId: new Types.ObjectId(ticketTypeId),
         quantity,
-        unitPrice: ticketTypeJson.currentPrice,
+        unitPrice: ticketType.currentPrice,
         currency: ticketType.currency,
       });
 
@@ -78,26 +79,26 @@ export class CartService {
     return this.getCart(userId);
   }
 
-  async getCart(userId: string): Promise<CartItem[]> {
-    return this.cartItemModel
+  async getCart(userId: string): Promise<CartItemDto[]> {
+    const cart = await this.cartItemModel
       .find({ userId: new Types.ObjectId(userId) })
       .populate({
-        path: 'eventId',
-        select: 'title startDate endDate location eventStatus',
+        path: 'event',
       })
       .populate({
-        path: 'ticketTypeId',
-        select: 'name description price currency quantity sold restrictions',
+        path: 'ticketType',
       })
       .sort({ createdAt: -1 })
       .exec();
+
+    return cart.map((c) => toDto(c, CartItemDto));
   }
 
   async updateCartItem(
     userId: string,
     cartItemId: string,
     quantity: number,
-  ): Promise<CartItem[]> {
+  ): Promise<CartItemDto[]> {
     const cartItem = await this.cartItemModel
       .findOne({
         _id: cartItemId,
@@ -106,13 +107,13 @@ export class CartService {
       .populate('ticketTypeId');
 
     if (!cartItem) {
-      throw new NotFoundException('Cart item not found');
+      throw new NotFoundException('Artículo del carrito no encontrado');
     }
 
     const ticketType = cartItem.ticketTypeId as any;
     if (quantity > ticketType.available + cartItem.quantity) {
       throw new BadRequestException(
-        `Only ${ticketType.available + cartItem.quantity} tickets available`,
+        `Solo hay {ticketType.available + cartItem.quantity} entradas disponibles.`,
       );
     }
 
@@ -129,7 +130,7 @@ export class CartService {
   async removeFromCart(
     userId: string,
     cartItemId: string,
-  ): Promise<CartItem[]> {
+  ): Promise<CartItemDto[]> {
     await this.cartItemModel.findOneAndDelete({
       _id: cartItemId,
       userId: new Types.ObjectId(userId),
@@ -144,30 +145,21 @@ export class CartService {
     });
   }
 
-  async getCartSummary(userId: string): Promise<any> {
+  async getCartSummary(userId: string): Promise<CartSummaryDto> {
     const cartItems = await this.getCart(userId);
 
     const summary = {
       items: cartItems.length,
-      subtotal: 0,
-      taxAmount: 0,
-      serviceFee: 0,
       total: 0,
-      currency: 'PEN',
+      currency: Currency.PEN,
       events: new Set(),
     };
 
     cartItems.forEach((item) => {
       const itemTotal = item.quantity * item.unitPrice;
-      summary.subtotal += itemTotal;
-      summary.events.add(item.eventId.toString());
+      summary.total += itemTotal;
+      summary.events.add(item.event.id.toString());
     });
-
-    summary.taxAmount = Math.round(summary.subtotal * 0.18 * 100) / 100;
-
-    summary.serviceFee = Math.round(summary.subtotal * 0.03 * 100) / 100;
-
-    summary.total = summary.subtotal + summary.taxAmount + summary.serviceFee;
 
     return {
       ...summary,

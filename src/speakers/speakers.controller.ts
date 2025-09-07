@@ -36,7 +36,7 @@ import { StatusDto } from 'src/common/dto/status.dto';
 import { SpeakerDto } from './dto/speaker.dto';
 import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 
-@ApiTags('Oradoras')
+@ApiTags('Oradores')
 @Controller('speakers')
 @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
 @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)

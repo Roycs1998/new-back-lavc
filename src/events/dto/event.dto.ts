@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventStatus } from '../../common/enums/event-status.enum';
 import { EventType } from '../../common/enums/event-type.enum';
 import { EventLocationType } from '../../common/enums/event-location-type.enum';
-import { Expose, Type } from 'class-transformer';
+import { Expose, Transform, Type } from 'class-transformer';
 import { AgendaItemType } from 'src/common/enums/agenda-item-type.enum';
 
 class ShortCompanyDto {
@@ -27,6 +27,58 @@ class ShortCompanyDto {
   @ApiPropertyOptional({ description: 'Teléfono', example: '+51 999 999 999' })
   @Expose()
   contactPhone?: string;
+}
+
+class ShortPersonDto {
+  @ApiProperty({
+    description: 'ID único de la persona',
+    example: '64f14b1a2c4e5a1234567890',
+  })
+  @Expose()
+  @Transform(({ obj }) => obj._id?.toString())
+  id: string;
+
+  @ApiProperty({
+    description: 'Nombre de la persona',
+    example: 'Juan',
+  })
+  @Expose()
+  firstName: string;
+
+  @ApiProperty({
+    description: 'Apellido de la persona',
+    example: 'Pérez',
+  })
+  @Expose()
+  lastName: string;
+
+  @ApiPropertyOptional({
+    description: 'Número de teléfono',
+    example: '+51987654321',
+  })
+  @Expose()
+  phone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Nombre completo de la persona (campo virtual)',
+    example: 'Juan Pérez',
+  })
+  @Expose()
+  fullName?: string;
+}
+
+class ShortSpeakerDto {
+  @ApiProperty({ example: '66a9d8f7a2a0b7b3e1b01234' })
+  @Expose()
+  id: string;
+
+  @ApiPropertyOptional({
+    description: 'Persona asociada al orador',
+    type: () => ShortPersonDto,
+  })
+  @Expose()
+  @Type(() => ShortPersonDto)
+  person: ShortPersonDto;
 }
 
 class EventAddressViewDto {
@@ -91,14 +143,6 @@ class EventLocationViewDto {
   @ApiPropertyOptional({ example: 350 })
   @Expose()
   capacity?: number;
-}
-
-export class ShortSpeakerDto {
-  @ApiProperty({ description: 'ID del speaker' })
-  id: string;
-
-  @ApiProperty({ description: 'Nombre completo' })
-  fullName: string;
 }
 
 class EventAgendaItemViewDto {
@@ -201,9 +245,9 @@ export class EventDto {
   @Expose()
   location!: EventLocationViewDto;
 
-  @ApiProperty({ type: [String] })
+  @ApiProperty({ type: [ShortSpeakerDto] })
   @Expose()
-  speakers!: string[];
+  speakers!: ShortSpeakerDto[];
 
   @ApiPropertyOptional({ type: [EventAgendaItemViewDto] })
   @Type(() => EventAgendaItemViewDto)

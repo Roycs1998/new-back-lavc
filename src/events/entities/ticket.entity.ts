@@ -1,14 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { TicketStatus } from '../../common/enums/ticket-status.enum';
+import { TicketStatus } from 'src/common/enums/ticket-status.enum';
 import { Currency } from 'src/common/enums/currency.enum';
 
-export type TicketTypeDocument = TicketType &
-  Document & {
-    _id: Types.ObjectId;
-  };
+export type TicketTypeDocument = TicketType & Document;
 
-@Schema({ _id: false })
+@Schema()
 class PricingTier {
   @Prop({ type: String, required: true, trim: true })
   name!: string;
@@ -67,17 +64,9 @@ const TicketAccessSchema = SchemaFactory.createForClass(TicketAccess);
 @Schema({
   collection: 'ticket_types',
   versionKey: false,
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
-  id: false,
-  toJSON: {
-    virtuals: true,
-    transform: (_doc, ret: any) => {
-      ret.id = ret._id?.toString();
-      delete ret._id;
-      delete ret.__v;
-      return ret;
-    },
-  },
+  timestamps: true,
+  id: true,
+  toJSON: { virtuals: true },
   toObject: { virtuals: true },
 })
 export class TicketType {
@@ -90,7 +79,7 @@ export class TicketType {
   @Prop({ type: String, trim: true })
   description?: string;
 
-  @Prop({ type: Number, required: true, min: 0 })
+  @Prop({ type: Number, required: false, min: 0 })
   price!: number;
 
   @Prop({ type: String, enum: Currency, default: Currency.PEN })
@@ -141,10 +130,12 @@ TicketTypeSchema.virtual('available').get(function (this: any) {
 
 TicketTypeSchema.virtual('currentPrice').get(function (this: any) {
   const tiers = this.pricingTiers as PricingTier[] | undefined;
+
   if (!tiers || tiers.length === 0) return this.price;
   const now = new Date();
   const active = tiers.find(
     (t) => t.isActive && t.startDate <= now && t.endDate >= now,
   );
+
   return active ? active.price : this.price;
 });

@@ -34,6 +34,13 @@ import { toDto } from 'src/utils/toDto';
 import { sanitizeDefined } from 'src/utils/sanitizeDefined';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { EventPaginatedDto } from './dto/event-pagination.dto';
+import { EventStatsDto } from './dto/event-stats.dto';
+import {
+  CompanyEventStatsDto,
+  EventsByStatusDto,
+} from './dto/company-event-stats.dto';
+import { TicketTypeDto } from './dto/ticket-type.dto';
+import { UpdateTicketTypeDto } from './dto/update-ticket-type.dto';
 
 type SortDir = 1 | -1;
 
@@ -50,6 +57,55 @@ export class EventsService {
     @Inject(forwardRef(() => CompaniesService))
     private companiesService: CompaniesService,
   ) {}
+
+  private async generateUniqueSlug(title: string): Promise<string> {
+    let baseSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (
+      await this.eventModel.findOne({
+        slug,
+        eventStatus: { $ne: EventStatus.DELETED },
+      })
+    ) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    return slug;
+  }
+
+  private parseSort(
+    sortRaw: string | undefined,
+    fallbackOrder: any,
+  ): Record<string, SortDir> {
+    const def: SortDir = fallbackOrder === 'asc' ? 1 : -1;
+    if (!sortRaw || !sortRaw.trim()) return { createdAt: -1 };
+
+    const out: Record<string, SortDir> = {};
+    for (const raw of sortRaw
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)) {
+      const hasPrefix = raw.startsWith('+') || raw.startsWith('-');
+      const field = hasPrefix ? raw.slice(1) : raw;
+      const dir: SortDir = raw.startsWith('-')
+        ? -1
+        : raw.startsWith('+')
+          ? 1
+          : def;
+
+      if (!/^[a-zA-Z0-9.]+$/.test(field)) continue;
+      out[field] = dir;
+    }
+    if (Object.keys(out).length === 0) out.createdAt = -1;
+    return out;
+  }
 
   async create(
     createEventDto: CreateEventDto,
@@ -119,33 +175,6 @@ export class EventsService {
     }
 
     return toDto(doc!, EventDto);
-  }
-
-  private parseSort(
-    sortRaw: string | undefined,
-    fallbackOrder: any,
-  ): Record<string, SortDir> {
-    const def: SortDir = fallbackOrder === 'asc' ? 1 : -1;
-    if (!sortRaw || !sortRaw.trim()) return { createdAt: -1 };
-
-    const out: Record<string, SortDir> = {};
-    for (const raw of sortRaw
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)) {
-      const hasPrefix = raw.startsWith('+') || raw.startsWith('-');
-      const field = hasPrefix ? raw.slice(1) : raw;
-      const dir: SortDir = raw.startsWith('-')
-        ? -1
-        : raw.startsWith('+')
-          ? 1
-          : def;
-
-      if (!/^[a-zA-Z0-9.]+$/.test(field)) continue;
-      out[field] = dir;
-    }
-    if (Object.keys(out).length === 0) out.createdAt = -1;
-    return out;
   }
 
   async findAll(
@@ -309,7 +338,7 @@ export class EventsService {
       .limit(limit);
 
     const [items, totalItems] = await Promise.all([
-      query.lean().exec(),
+      query.exec(),
       this.eventModel.countDocuments(match).exec(),
     ]);
 
@@ -373,7 +402,7 @@ export class EventsService {
     return toDto(event, EventDto);
   }
 
-  async findBySlug(slug: string): Promise<EventDocument> {
+  async findBySlug(slug: string): Promise<EventDto> {
     const event = await this.eventModel
       .findOne({
         slug,
@@ -392,7 +421,7 @@ export class EventsService {
       throw new NotFoundException(`No se encontró el evento con slug '${slug}`);
     }
 
-    return event;
+    return toDto(event, EventDto);
   }
 
   async update(
@@ -564,80 +593,7 @@ export class EventsService {
     );
   }
 
-  async createTicketType(
-    eventId: string,
-    createTicketTypeDto: CreateTicketTypeDto,
-    createdBy: string,
-  ): Promise<TicketType> {
-    try {
-      const ticketTypeData = {
-        ...createTicketTypeDto,
-        eventId: new Types.ObjectId(eventId),
-        createdBy: new Types.ObjectId(createdBy),
-        ticketStatus: TicketStatus.AVAILABLE,
-      };
-
-      const ticketType = new this.ticketTypeModel(ticketTypeData);
-      return await ticketType.save();
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  async getEventTicketTypes(eventId: string): Promise<TicketTypeDocument[]> {
-    return this.ticketTypeModel
-      .find({
-        eventId: new Types.ObjectId(eventId),
-      })
-      .populate('createdBy', 'email role')
-      .sort({ createdAt: 1 })
-      .exec();
-  }
-
-  async updateTicketType(
-    ticketTypeId: string,
-    updateData: any,
-    updatedBy: string,
-  ): Promise<TicketType> {
-    const updateInfo = {
-      ...updateData,
-      updatedBy: new Types.ObjectId(updatedBy),
-      updatedAt: new Date(),
-    };
-
-    const ticketType = await this.ticketTypeModel
-      .findByIdAndUpdate(ticketTypeId, updateInfo, { new: true })
-      .populate('createdBy', 'email role')
-      .populate('updatedBy', 'email role')
-      .exec();
-
-    if (!ticketType) {
-      throw new NotFoundException(
-        `Ticket type with ID ${ticketTypeId} not found`,
-      );
-    }
-
-    return ticketType;
-  }
-
-  async deleteTicketType(ticketTypeId: string): Promise<void> {
-    const ticketType = await this.ticketTypeModel.findById(ticketTypeId);
-    if (!ticketType) {
-      throw new NotFoundException(
-        `Ticket type with ID ${ticketTypeId} not found`,
-      );
-    }
-
-    if (ticketType.sold > 0) {
-      throw new BadRequestException(
-        'Cannot delete ticket type that has already been sold',
-      );
-    }
-
-    await this.ticketTypeModel.findByIdAndDelete(ticketTypeId);
-  }
-
-  async getEventStats(eventId: string): Promise<any> {
+  async getEventStats(eventId: string): Promise<EventStatsDto> {
     const event = await this.findOne(eventId);
 
     const ticketStats = await this.ticketTypeModel.aggregate([
@@ -683,7 +639,7 @@ export class EventsService {
     };
   }
 
-  async getCompanyEventStats(companyId: string): Promise<any> {
+  async getCompanyEventStats(companyId: string): Promise<CompanyEventStatsDto> {
     const stats = await this.eventModel.aggregate([
       {
         $match: {
@@ -757,25 +713,101 @@ export class EventsService {
     };
   }
 
-  private async generateUniqueSlug(title: string): Promise<string> {
-    let baseSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+  async createTicketType(
+    eventId: string,
+    createTicketTypeDto: CreateTicketTypeDto,
+    createdBy: string,
+  ): Promise<TicketTypeDto> {
+    try {
+      const event = await this.eventModel
+        .findOne({
+          _id: toObjectId(eventId),
+          eventStatus: { $ne: EventStatus.DELETED },
+        })
+        .lean()
+        .exec();
 
-    let slug = baseSlug;
-    let counter = 1;
+      if (!event) throw new NotFoundException('Evento no encontrado');
 
-    while (
-      await this.eventModel.findOne({
-        slug,
-        eventStatus: { $ne: EventStatus.DELETED },
-      })
-    ) {
-      slug = `${baseSlug}-${counter}`;
-      counter++;
+      const ticketTypeData = {
+        ...createTicketTypeDto,
+        eventId: new Types.ObjectId(eventId),
+        createdBy: new Types.ObjectId(createdBy),
+        ticketStatus:
+          createTicketTypeDto.ticketStatus ?? TicketStatus.AVAILABLE,
+      };
+
+      const created = await this.ticketTypeModel.create(ticketTypeData);
+
+      return toDto(created, TicketTypeDto);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateTicketType(
+    ticketTypeId: string,
+    updateData: UpdateTicketTypeDto,
+    updatedBy: string,
+  ): Promise<TicketTypeDto> {
+    const current = await this.ticketTypeModel.findById(ticketTypeId).exec();
+    if (!current) {
+      throw new NotFoundException(
+        `No se ha encontrado el tipo de ticket con ID ${ticketTypeId}`,
+      );
     }
 
-    return slug;
+    const $set = sanitizeDefined({
+      ...updateData,
+      updatedBy: toObjectId(updatedBy),
+      updatedAt: new Date(),
+    });
+
+    const updated = await this.ticketTypeModel
+      .findByIdAndUpdate(
+        ticketTypeId,
+        { $set },
+        {
+          new: true,
+          runValidators: true,
+          context: 'query',
+        },
+      )
+      .exec();
+
+    if (!updated)
+      throw new NotFoundException(
+        `Ticket con ID ${ticketTypeId} no encontrado`,
+      );
+
+    return toDto(updated, TicketTypeDto);
+  }
+
+  async getEventTicketTypes(eventId: string): Promise<TicketTypeDto[]> {
+    const docs = await this.ticketTypeModel
+      .find({
+        eventId: new Types.ObjectId(eventId),
+      })
+      .sort({ createdAt: 1 })
+      .exec();
+
+    return docs.map((d) => toDto(d, TicketTypeDto));
+  }
+
+  async deleteTicketType(ticketTypeId: string): Promise<void> {
+    const ticketType = await this.ticketTypeModel.findById(ticketTypeId);
+    if (!ticketType) {
+      throw new NotFoundException(
+        `No se ha encontrado el tipo de ticket con ID ${ticketTypeId}`,
+      );
+    }
+
+    if (ticketType.sold > 0) {
+      throw new BadRequestException(
+        'No se puede eliminar un tipo de entrada que ya se ha vendido.',
+      );
+    }
+
+    await this.ticketTypeModel.findByIdAndDelete(ticketTypeId);
   }
 }

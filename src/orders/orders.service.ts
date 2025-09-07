@@ -2,8 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -11,7 +9,6 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderStatus } from '../common/enums/order-status.enum';
 import { EntityStatus } from '../common/enums/entity-status.enum';
 import { CartService } from './cart.service';
-import { EventsService } from '../events/events.service';
 import { Order, OrderDocument } from './entities/order.entity';
 
 @Injectable()
@@ -31,7 +28,7 @@ export class OrdersService {
     }
 
     const itemsByEvent = cartItems.reduce((acc, item) => {
-      const eventId = item.eventId._id.toString();
+      const eventId = item.event.id.toString();
       if (!acc[eventId]) {
         acc[eventId] = [];
       }

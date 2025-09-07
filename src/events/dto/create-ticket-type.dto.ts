@@ -6,154 +6,194 @@ import {
   IsArray,
   IsBoolean,
   ValidateNested,
-  IsDateString,
   Min,
-  Max,
+  IsNotEmpty,
+  MaxLength,
+  IsDate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from 'src/common/enums/currency.enum';
+import { TicketStatus } from 'src/common/enums/ticket-status.enum';
 
-class PricingTierDto {
-  @ApiProperty({ description: 'Tier name (e.g., "Early Bird", "Regular")' })
+export class PricingTierCreateDto {
   @IsString()
-  name: string;
+  @IsNotEmpty()
+  @MaxLength(80)
+  @ApiProperty({ description: 'Nombre del tier', example: 'Preventa' })
+  name!: string;
 
-  @ApiProperty({ description: 'Tier price', minimum: 0 })
   @IsNumber()
   @Min(0)
-  price: number;
+  @ApiProperty({ description: 'Precio del tier', example: 80 })
+  price!: number;
 
-  @ApiProperty({ description: 'Tier start date' })
-  @IsDateString()
-  startDate: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiProperty({
+    description: 'Inicio de vigencia (ISO)',
+    example: '2025-08-01T00:00:00.000Z',
+  })
+  startDate!: Date;
 
-  @ApiProperty({ description: 'Tier end date' })
-  @IsDateString()
-  endDate: string;
+  @IsDate()
+  @Type(() => Date)
+  @ApiProperty({
+    description: 'Fin de vigencia (ISO)',
+    example: '2025-08-15T23:59:59.000Z',
+  })
+  endDate!: Date;
 
-  @ApiPropertyOptional({ description: 'Tier is active', default: true })
-  @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  @ApiProperty({ description: 'Si el tier está activo', example: true })
+  isActive!: boolean;
 }
 
-class TicketRestrictionsDto {
-  @ApiPropertyOptional({ description: 'Minimum tickets per order', default: 1 })
-  @IsOptional()
+export class TicketRestrictionsDto {
   @IsNumber()
   @Min(1)
-  minPerOrder?: number;
+  @ApiProperty({ description: 'Mínimo por orden', example: 1 })
+  minPerOrder!: number;
 
-  @ApiPropertyOptional({
-    description: 'Maximum tickets per order',
-    default: 10,
-  })
-  @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(100)
-  maxPerOrder?: number;
+  @ApiProperty({ description: 'Máximo por orden', example: 10 })
+  maxPerOrder!: number;
 
-  @ApiPropertyOptional({ description: 'Maximum tickets per user' })
   @IsOptional()
   @IsNumber()
   @Min(1)
+  @ApiPropertyOptional({ description: 'Máximo por usuario', example: 4 })
   maxPerUser?: number;
 
-  @ApiPropertyOptional({ description: 'Requires approval', default: false })
-  @IsOptional()
   @IsBoolean()
-  requiresApproval?: boolean;
+  @ApiProperty({ description: '¿Requiere aprobación?', example: false })
+  requiresApproval!: boolean;
 
-  @ApiPropertyOptional({ description: 'Transferable', default: true })
-  @IsOptional()
   @IsBoolean()
-  transferable?: boolean;
+  @ApiProperty({ description: '¿Es transferible?', example: true })
+  transferable!: boolean;
 
-  @ApiPropertyOptional({ description: 'Refundable', default: false })
-  @IsOptional()
   @IsBoolean()
-  refundable?: boolean;
+  @ApiProperty({ description: '¿Es reembolsable?', example: false })
+  refundable!: boolean;
 }
 
-class TicketAccessDto {
-  @ApiPropertyOptional({ description: 'Areas/sessions included' })
+export class TicketAccessDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @ApiPropertyOptional({
+    description: 'Accesos incluidos',
+    type: [String],
+    example: ['Keynote', 'Expo Hall'],
+  })
   includesAccess?: string[];
 
-  @ApiPropertyOptional({ description: 'Areas/sessions excluded' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @ApiPropertyOptional({
+    description: 'Accesos excluidos',
+    type: [String],
+    example: ['VIP Lounge'],
+  })
   excludesAccess?: string[];
 
-  @ApiPropertyOptional({ description: 'Additional perks' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @ApiPropertyOptional({
+    description: 'Beneficios/perks',
+    type: [String],
+    example: ['Coffee break', 'Merch pack'],
+  })
   perks?: string[];
 }
 
 export class CreateTicketTypeDto {
-  @ApiProperty({ description: 'Ticket type name' })
   @IsString()
-  name: string;
+  @IsNotEmpty()
+  @MaxLength(120)
+  @ApiProperty({ description: 'Nombre del tipo de ticket', example: 'General' })
+  name!: string;
 
-  @ApiPropertyOptional({ description: 'Ticket type description' })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
+  @ApiPropertyOptional({
+    description: 'Descripción del ticket',
+    example: 'Acceso a todas las charlas',
+  })
   description?: string;
 
-  @ApiProperty({ description: 'Base price', minimum: 0 })
-  @IsNumber()
-  @Min(0)
-  price: number;
-
-  @ApiPropertyOptional({
-    description: 'Currency',
-    enum: Currency,
-    default: Currency.PEN,
-  })
-  @IsOptional()
   @IsEnum(Currency)
-  currency?: string;
+  @ApiProperty({ description: 'Moneda', enum: Currency, example: Currency.PEN })
+  currency!: Currency;
 
-  @ApiProperty({ description: 'Total quantity available', minimum: 1 })
   @IsNumber()
   @Min(1)
-  quantity: number;
+  @ApiProperty({ description: 'Cantidad total disponible', example: 300 })
+  quantity!: number;
 
-  @ApiPropertyOptional({ description: 'Sale start date' })
   @IsOptional()
-  @IsDateString()
-  saleStartDate?: string;
-
-  @ApiPropertyOptional({ description: 'Sale end date' })
-  @IsOptional()
-  @IsDateString()
-  saleEndDate?: string;
-
+  @IsEnum(TicketStatus)
   @ApiPropertyOptional({
-    description: 'Pricing tiers (early bird, regular, etc.)',
+    description: 'Estado del ticket al crear (por defecto AVAILABLE)',
+    enum: TicketStatus,
+    example: TicketStatus.AVAILABLE,
   })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PricingTierDto)
-  pricingTiers?: PricingTierDto[];
+  ticketStatus?: TicketStatus;
 
-  @ApiPropertyOptional({ description: 'Ticket restrictions' })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  @ApiPropertyOptional({
+    description: 'Inicio de venta (ISO)',
+    example: '2025-08-01T00:00:00.000Z',
+  })
+  saleStartDate?: Date;
+
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  @ApiPropertyOptional({
+    description: 'Fin de venta (ISO)',
+    example: '2025-09-30T23:59:59.000Z',
+  })
+  saleEndDate?: Date;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @ApiPropertyOptional({ description: 'Precio de la entrada', example: 80 })
+  price?: number;
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => PricingTierCreateDto)
+  @IsArray()
+  @ApiPropertyOptional({
+    description: 'Tiers de precio temporales (opcional)',
+    type: [PricingTierCreateDto],
+  })
+  pricingTiers?: PricingTierCreateDto[];
+
   @IsOptional()
   @ValidateNested()
   @Type(() => TicketRestrictionsDto)
+  @ApiPropertyOptional({
+    description: 'Restricciones de compra',
+    type: TicketRestrictionsDto,
+  })
   restrictions?: TicketRestrictionsDto;
 
-  @ApiPropertyOptional({ description: 'Access permissions and perks' })
   @IsOptional()
   @ValidateNested()
   @Type(() => TicketAccessDto)
+  @ApiPropertyOptional({
+    description: 'Accesos y beneficios',
+    type: TicketAccessDto,
+  })
   access?: TicketAccessDto;
 }

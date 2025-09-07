@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { OrderStatus } from '../../common/enums/order-status.enum';
-import { EntityStatus } from '../../common/enums/entity-status.enum';
+import { OrderStatus } from 'src/common/enums/order-status.enum';
+import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { Currency } from 'src/common/enums/currency.enum';
 import { DocumentType } from 'src/common/enums/document-type.enum';
 
@@ -28,7 +28,6 @@ export class OrderItem {
   currency!: Currency;
 }
 export const OrderItemSchema = SchemaFactory.createForClass(OrderItem);
-Object.assign(OrderItemSchema.options as any, { skipSoftDeletePlugin: true });
 
 @Schema({ _id: false })
 export class CustomerInfo {
@@ -51,9 +50,6 @@ export class CustomerInfo {
   documentNumber!: string;
 }
 export const CustomerInfoSchema = SchemaFactory.createForClass(CustomerInfo);
-Object.assign(CustomerInfoSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({ _id: false })
 export class BillingInfo {
@@ -70,12 +66,13 @@ export class BillingInfo {
   isCompany!: boolean;
 }
 export const BillingInfoSchema = SchemaFactory.createForClass(BillingInfo);
-Object.assign(BillingInfoSchema.options as any, { skipSoftDeletePlugin: true });
 
 @Schema({
   collection: 'orders',
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  timestamps: true,
   versionKey: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 })
 export class Order {
   @Prop({ required: true, unique: true, index: true })
@@ -90,10 +87,6 @@ export class Order {
   @Prop({
     type: [OrderItemSchema],
     required: true,
-    validate: [
-      (v: OrderItem[]) => Array.isArray(v) && v.length > 0,
-      'items required',
-    ],
   })
   items: OrderItem[];
 
@@ -143,8 +136,6 @@ export class Order {
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);
-
-Object.assign(OrderSchema.options as any, { skipSoftDeletePlugin: true });
 
 OrderSchema.index({ userId: 1, status: 1 });
 OrderSchema.index({ eventId: 1, status: 1 });

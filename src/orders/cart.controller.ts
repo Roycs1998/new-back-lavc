@@ -7,14 +7,14 @@ import {
   Delete,
   Param,
   UseGuards,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
+  ApiBody,
+  ApiOkResponse,
+  ApiCreatedResponse,
 } from '@nestjs/swagger';
 import { CartService } from './cart.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
@@ -22,8 +22,11 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator';
 import { ParseObjectIdPipe } from '../common/pipes/parse-object-id.pipe';
+import { CartItemDto } from './dto/cart-item.dto';
+import { CartSummaryDto } from './dto/cart-summary.dto';
+import { UpdateCartItemQuantityDto } from './dto/update-cart-item-quantity.dto';
 
-@ApiTags('Shopping Cart')
+@ApiTags('Carrito de la compra')
 @Controller('cart')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
@@ -31,12 +34,15 @@ export class CartController {
   constructor(private readonly cartService: CartService) {}
 
   @Post('events/:eventId/add')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Add ticket to cart' })
-  @ApiResponse({ status: 200, description: 'Item added to cart successfully' })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid request or insufficient tickets',
+  @ApiOperation({
+    summary: 'Agregar ticket al carrito',
+    description:
+      'Agrega un tipo de ticket al carrito del usuario y retorna el carrito actualizado.',
+  })
+  @ApiBody({ type: AddToCartDto })
+  @ApiOkResponse({
+    type: [CartItemDto],
+    description: 'Carrito actualizado correctamente',
   })
   addToCart(
     @Param('eventId', ParseObjectIdPipe) eventId: string,
@@ -47,43 +53,67 @@ export class CartController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get user cart' })
-  @ApiResponse({ status: 200, description: 'Cart retrieved successfully' })
-  getCart(@CurrentUser() currentUser: CurrentUserData) {
+  @ApiOperation({
+    summary: 'Obtener el carrito del usuario',
+    description:
+      'Retorna los ítems actuales del carrito con detalles de evento y tipo de ticket.',
+  })
+  @ApiOkResponse({
+    type: [CartItemDto],
+    description: 'Carrito obtenido correctamente',
+  })
+  getCart(@CurrentUser() currentUser: CurrentUserData): Promise<CartItemDto[]> {
     return this.cartService.getCart(currentUser.id);
   }
 
   @Get('summary')
-  @ApiOperation({ summary: 'Get cart summary with totals' })
-  @ApiResponse({
-    status: 200,
-    description: 'Cart summary retrieved successfully',
+  @ApiOperation({
+    summary: 'Obtener resumen del carrito',
+    description:
+      'Devuelve totales del carrito (subtotal, impuestos, cargos y total), además del número de eventos involucrados.',
   })
-  getCartSummary(@CurrentUser() currentUser: CurrentUserData) {
+  @ApiOkResponse({
+    type: CartSummaryDto,
+    description: 'Resumen del carrito obtenido correctamente',
+  })
+  getCartSummary(
+    @CurrentUser() currentUser: CurrentUserData,
+  ): Promise<CartSummaryDto> {
     return this.cartService.getCartSummary(currentUser.id);
   }
 
   @Patch('items/:cartItemId')
-  @ApiOperation({ summary: 'Update cart item quantity' })
-  @ApiResponse({ status: 200, description: 'Cart item updated successfully' })
+  @ApiOperation({
+    summary: 'Actualizar cantidad de un ítem del carrito',
+    description:
+      'Actualiza la cantidad del ítem. Si la cantidad es 0, el ítem se elimina. Retorna el carrito actualizado.',
+  })
+  @ApiBody({ type: UpdateCartItemQuantityDto })
+  @ApiOkResponse({
+    type: [CartItemDto],
+    description: 'Carrito actualizado correctamente',
+  })
   updateCartItem(
     @Param('cartItemId', ParseObjectIdPipe) cartItemId: string,
-    @Body('quantity') quantity: number,
+    @Body() body: UpdateCartItemQuantityDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
     return this.cartService.updateCartItem(
       currentUser.id,
       cartItemId,
-      quantity,
+      body.quantity,
     );
   }
 
   @Delete('items/:cartItemId')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove item from cart' })
-  @ApiResponse({
-    status: 200,
-    description: 'Item removed from cart successfully',
+  @ApiOperation({
+    summary: 'Eliminar ítem del carrito',
+    description: 'Elimina el ítem indicado y retorna el carrito actualizado.',
+  })
+  @ApiOkResponse({
+    type: [CartItemDto],
+    description: 'Ítem eliminado y carrito actualizado',
   })
   removeFromCart(
     @Param('cartItemId', ParseObjectIdPipe) cartItemId: string,
@@ -93,9 +123,13 @@ export class CartController {
   }
 
   @Delete('clear')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Clear entire cart' })
-  @ApiResponse({ status: 204, description: 'Cart cleared successfully' })
+  @ApiOperation({
+    summary: 'Vaciar carrito',
+    description: 'Elimina todos los ítems del carrito del usuario.',
+  })
+  @ApiCreatedResponse({
+    description: 'Carrito vaciado correctamente',
+  })
   clearCart(@CurrentUser() currentUser: CurrentUserData) {
     return this.cartService.clearCart(currentUser.id);
   }

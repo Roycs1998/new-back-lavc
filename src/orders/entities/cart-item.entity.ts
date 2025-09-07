@@ -7,8 +7,8 @@ export type CartItemDocument = CartItem & Document;
 @Schema({
   collection: 'cart_items',
   versionKey: false,
-  id: false,
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  id: true,
+  timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true },
 })
@@ -40,7 +40,26 @@ export class CartItem {
 
 export const CartItemSchema = SchemaFactory.createForClass(CartItem);
 
-Object.assign(CartItemSchema.options as any, { skipSoftDeletePlugin: true });
+CartItemSchema.virtual('user', {
+  ref: 'User',
+  localField: 'userId',
+  foreignField: '_id',
+  justOne: true,
+});
+
+CartItemSchema.virtual('event', {
+  ref: 'Event',
+  localField: 'eventId',
+  foreignField: '_id',
+  justOne: true,
+});
+
+CartItemSchema.virtual('ticketType', {
+  ref: 'TicketType',
+  localField: 'ticketTypeId',
+  foreignField: '_id',
+  justOne: true,
+});
 
 CartItemSchema.index({ userId: 1 });
 CartItemSchema.index({ reservedUntil: 1 });
