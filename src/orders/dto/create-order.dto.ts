@@ -7,12 +7,18 @@ import {
 } from '../../payments/dto/create-payment.dto';
 
 export class CreateOrderDto {
-  @ApiProperty({ description: 'Customer information' })
+  @ApiProperty({
+    description: 'Datos del cliente para facturación y contacto',
+    type: CustomerInfoDto,
+  })
   @ValidateNested()
   @Type(() => CustomerInfoDto)
   customerInfo: CustomerInfoDto;
 
-  @ApiPropertyOptional({ description: 'Billing information' })
+  @ApiPropertyOptional({
+    description: 'Datos de facturación (empresa/RUC), opcional',
+    type: BillingInfoDto,
+  })
   @IsOptional()
   @ValidateNested()
   @Type(() => BillingInfoDto)

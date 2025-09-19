@@ -94,13 +94,7 @@ export class Order {
   subtotal: number;
 
   @Prop({ min: 0, default: 0 })
-  taxAmount: number;
-
-  @Prop({ min: 0, default: 0 })
   discountAmount: number;
-
-  @Prop({ min: 0, default: 0 })
-  serviceFee: number;
 
   @Prop({ required: true, min: 0 })
   total: number;
@@ -114,13 +108,6 @@ export class Order {
     default: OrderStatus.CART,
   })
   status: OrderStatus;
-
-  @Prop({
-    type: String,
-    enum: EntityStatus,
-    default: EntityStatus.ACTIVE,
-  })
-  entityStatus: EntityStatus;
 
   @Prop({ type: CustomerInfoSchema, required: true })
   customerInfo: CustomerInfo;
@@ -136,6 +123,13 @@ export class Order {
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);
+
+OrderSchema.virtual('event', {
+  ref: 'Event',
+  localField: 'eventId',
+  foreignField: '_id',
+  justOne: true,
+});
 
 OrderSchema.index({ userId: 1, status: 1 });
 OrderSchema.index({ eventId: 1, status: 1 });

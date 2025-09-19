@@ -1,18 +1,11 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -23,6 +16,7 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 import { ParseObjectIdPipe } from '../common/pipes/parse-object-id.pipe';
 import { UserRole } from '../common/enums/user-role.enum';
 import { Roles } from '../common/decorators/roles.decorator';
+import { OrderDto } from './dto/order.dto';
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -32,14 +26,20 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create order from cart' })
-  @ApiResponse({ status: 201, description: 'Order created successfully' })
-  @ApiResponse({ status: 400, description: 'Cart is empty or invalid data' })
+  @ApiOperation({
+    summary: 'Crear pedidos desde el carrito',
+    description:
+      'Crea uno o más pedidos (uno por evento presente en el carrito del usuario) y devuelve la lista de pedidos creados.',
+  })
+  @ApiBody({ type: CreateOrderDto })
+  @ApiCreatedResponse({
+    type: [OrderDto],
+    description: 'Pedidos creados correctamente',
+  })
   createOrder(
     @Body() createOrderDto: CreateOrderDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<OrderDto[]> {
     return this.ordersService.createOrderFromCart(
       currentUser.id,
       createOrderDto,
@@ -47,41 +47,65 @@ export class OrdersController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get user orders' })
-  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
-  getUserOrders(@CurrentUser() currentUser: CurrentUserData) {
+  @ApiOperation({
+    summary: 'Listar pedidos del usuario',
+    description:
+      'Devuelve los pedidos del usuario autenticado, ordenados del más reciente al más antiguo.',
+  })
+  @ApiOkResponse({
+    type: [OrderDto],
+    description: 'Pedidos obtenidos correctamente',
+  })
+  getUserOrders(
+    @CurrentUser() currentUser: CurrentUserData,
+  ): Promise<OrderDto[]> {
     return this.ordersService.findUserOrders(currentUser.id);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get order details' })
-  @ApiResponse({ status: 200, description: 'Order found' })
-  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiOperation({
+    summary: 'Obtener detalle de un pedido',
+    description:
+      'Devuelve el detalle del pedido solicitado si pertenece al usuario autenticado.',
+  })
+  @ApiOkResponse({
+    type: OrderDto,
+    description: 'Pedido obtenido correctamente',
+  })
   getOrder(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<OrderDto> {
     return this.ordersService.findOne(id, currentUser.id);
   }
 
   @Post(':id/confirm')
-  @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Confirm paid order (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Order confirmed successfully' })
-  confirmOrder(@Param('id', ParseObjectIdPipe) id: string) {
+  @ApiOperation({
+    summary: 'Confirmar pedido pagado (solo administradores)',
+    description:
+      'Cambia el estado del pedido a **CONFIRMED**. Requiere que el pedido esté previamente en **PAID**.',
+  })
+  @ApiOkResponse({
+    type: OrderDto,
+    description: 'Pedido confirmado correctamente',
+  })
+  confirmOrder(@Param('id', ParseObjectIdPipe) id: string): Promise<OrderDto> {
     return this.ordersService.confirmOrder(id);
   }
 
   @Post(':id/cancel')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel order' })
-  @ApiResponse({ status: 200, description: 'Order cancelled successfully' })
-  cancelOrder(
-    @Param('id', ParseObjectIdPipe) id: string,
-    @Body('reason') reason?: string,
-  ) {
-    return this.ordersService.cancelOrder(id, reason);
+  @ApiOperation({
+    summary: 'Cancelar pedido',
+    description:
+      'Cancela el pedido (no aplica para pedidos confirmados o reembolsados).',
+  })
+  @ApiOkResponse({
+    type: OrderDto,
+    description: 'Pedido cancelado correctamente',
+  })
+  cancelOrder(@Param('id', ParseObjectIdPipe) id: string): Promise<OrderDto> {
+    return this.ordersService.cancelOrder(id);
   }
 }

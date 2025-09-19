@@ -40,13 +40,6 @@ export class CartItem {
 
 export const CartItemSchema = SchemaFactory.createForClass(CartItem);
 
-CartItemSchema.virtual('user', {
-  ref: 'User',
-  localField: 'userId',
-  foreignField: '_id',
-  justOne: true,
-});
-
 CartItemSchema.virtual('event', {
   ref: 'Event',
   localField: 'eventId',

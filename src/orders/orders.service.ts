@@ -10,6 +10,8 @@ import { OrderStatus } from '../common/enums/order-status.enum';
 import { EntityStatus } from '../common/enums/entity-status.enum';
 import { CartService } from './cart.service';
 import { Order, OrderDocument } from './entities/order.entity';
+import { OrderDto } from './dto/order.dto';
+import { toDto } from 'src/utils/toDto';
 
 @Injectable()
 export class OrdersService {
@@ -21,7 +23,7 @@ export class OrdersService {
   async createOrderFromCart(
     userId: string,
     createOrderDto: CreateOrderDto,
-  ): Promise<Order[]> {
+  ): Promise<OrderDto[]> {
     const cartItems = await this.cartService.getCart(userId);
     if (cartItems.length === 0) {
       throw new BadRequestException('Cart is empty');
@@ -36,7 +38,7 @@ export class OrdersService {
       return acc;
     }, {});
 
-    const orders: Order[] = [];
+    const orders: OrderDocument[] = [];
 
     for (const [eventId, items] of Object.entries(itemsByEvent)) {
       const order = await this.createSingleOrder(
@@ -50,7 +52,7 @@ export class OrdersService {
 
     await this.cartService.clearCart(userId);
 
-    return orders;
+    return orders.map((o) => toDto(o, OrderDto));
   }
 
   private async createSingleOrder(
@@ -58,139 +60,181 @@ export class OrdersService {
     eventId: string,
     cartItems: any[],
     createOrderDto: CreateOrderDto,
-  ): Promise<Order> {
+  ): Promise<OrderDocument> {
     const orderNumber = await this.generateOrderNumber();
+    const currencies = new Set<string>(
+      cartItems.map((it) => String(it.currency)),
+    );
+    if (currencies.size > 1) {
+      throw new BadRequestException(
+        'Todos los artículos de un pedido deben compartir la misma moneda',
+      );
+    }
+
+    const currency = (cartItems[0]?.currency as string) ?? 'PEN';
 
     let subtotal = 0;
+
     const orderItems = cartItems.map((item) => {
-      const itemTotal = item.quantity * item.unitPrice;
+      const ticketType =
+        item.ticketTypeId && typeof item.ticketTypeId === 'object'
+          ? item.ticketTypeId
+          : {};
+      const ticketTypeId =
+        ticketType?._id?.toString?.() ?? item.ticketTypeId?.toString?.();
+      const ticketTypeName = ticketType?.name ?? item.ticketTypeName;
+
+      if (!ticketTypeId || !ticketTypeName) {
+        throw new BadRequestException(
+          'Artículo de carrito no válido: faltan datos del tipo de ticket',
+        );
+      }
+
+      const itemTotal = Number(item.quantity) * Number(item.unitPrice);
       subtotal += itemTotal;
 
       return {
-        ticketTypeId: item.ticketTypeId._id,
-        ticketTypeName: item.ticketTypeId.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        ticketTypeId: new Types.ObjectId(ticketTypeId),
+        ticketTypeName,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
         totalPrice: itemTotal,
-        currency: item.currency,
+        currency,
       };
     });
 
-    const taxAmount = Math.round(subtotal * 0.18 * 100) / 100;
-    const serviceFee = Math.round(subtotal * 0.03 * 100) / 100;
-    const total = subtotal + taxAmount + serviceFee;
+    const total = subtotal;
 
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
 
-    const order = new this.orderModel({
+    const created = await this.orderModel.create({
       orderNumber,
       userId: new Types.ObjectId(userId),
       eventId: new Types.ObjectId(eventId),
       items: orderItems,
       subtotal,
-      taxAmount,
-      serviceFee,
+      discountAmount: 0,
       total,
-      currency: 'PEN',
+      currency,
       status: OrderStatus.PENDING_PAYMENT,
       customerInfo: createOrderDto.customerInfo,
       billingInfo: createOrderDto.billingInfo,
       expiresAt,
+      entityStatus: EntityStatus.ACTIVE,
     });
 
-    return await order.save();
-  }
-
-  async findUserOrders(userId: string): Promise<Order[]> {
-    return this.orderModel
-      .find({
-        userId: new Types.ObjectId(userId),
-        entityStatus: EntityStatus.ACTIVE,
-      })
-      .populate('eventId', 'title startDate endDate location')
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  async findOne(orderId: string, userId?: string): Promise<OrderDocument> {
-    const filter: any = { _id: orderId };
-    if (userId) {
-      filter.userId = new Types.ObjectId(userId);
-    }
-
-    const order = await this.orderModel
-      .findOne(filter)
-      .populate('eventId', 'title startDate endDate location')
-      .populate('userId', 'email')
-      .exec();
+    const order = await this.orderModel.findById(created._id).populate('event');
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException('Orden no encontrada');
     }
 
     return order;
   }
 
-  async confirmOrder(orderId: string): Promise<Order> {
-    const order = await this.findOne(orderId);
+  async findUserOrders(userId: string): Promise<OrderDto[]> {
+    const docs = await this.orderModel
+      .find({
+        userId: new Types.ObjectId(userId),
+        entityStatus: EntityStatus.ACTIVE,
+      })
+      .populate('event')
+      .sort({ createdAt: -1 })
+      .exec();
 
-    if (order.status !== OrderStatus.PAID) {
-      throw new BadRequestException('Order must be paid before confirmation');
-    }
-
-    order.status = OrderStatus.CONFIRMED;
-    order.confirmedAt = new Date();
-
-    return await order.save();
+    return docs.map((d) => toDto(d, OrderDto));
   }
 
-  async cancelOrder(orderId: string, reason?: string): Promise<Order> {
-    const order = await this.findOne(orderId);
+  async findOne(orderId: string, userId?: string): Promise<OrderDto> {
+    const filter: any = { _id: orderId };
+    if (userId) filter.userId = new Types.ObjectId(userId);
 
-    if ([OrderStatus.CONFIRMED, OrderStatus.REFUNDED].includes(order.status)) {
+    const order = await this.orderModel
+      .findOne(filter)
+      .populate('event')
+      .exec();
+
+    if (!order) throw new NotFoundException('Orden no encontrada');
+    return toDto(order, OrderDto);
+  }
+
+  async confirmOrder(orderId: string): Promise<OrderDto> {
+    const orderDoc = await this.orderModel
+      .findById(orderId)
+      .populate('event')
+      .exec();
+    if (!orderDoc) throw new NotFoundException('Orden no encontrada');
+
+    if (orderDoc.status !== OrderStatus.PAID) {
       throw new BadRequestException(
-        'Cannot cancel confirmed or refunded order',
+        'El pedido debe pagarse antes de la confirmación.',
       );
     }
 
-    order.status = OrderStatus.CANCELLED;
+    orderDoc.status = OrderStatus.CONFIRMED;
+    orderDoc.confirmedAt = new Date();
+    await orderDoc.save();
 
-    return await order.save();
+    return toDto(orderDoc, OrderDto);
   }
 
-  async expireOrder(orderId: string): Promise<Order> {
-    const order = await this.findOne(orderId);
+  async cancelOrder(orderId: string): Promise<OrderDto> {
+    const orderDoc = await this.orderModel
+      .findById(orderId)
+      .populate('event')
+      .exec();
+    if (!orderDoc) throw new NotFoundException('Orden no encontrada');
 
-    if (order.status !== OrderStatus.PENDING_PAYMENT) {
+    if (
+      orderDoc.status === OrderStatus.CONFIRMED ||
+      orderDoc.status === OrderStatus.REFUNDED
+    ) {
       throw new BadRequestException(
-        'Only pending payment orders can be expired',
+        'No se puede cancelar un pedido confirmado o reembolsado',
       );
     }
 
-    order.status = OrderStatus.EXPIRED;
+    orderDoc.status = OrderStatus.CANCELLED;
+    await orderDoc.save();
 
-    return await order.save();
+    return toDto(orderDoc, OrderDto);
+  }
+
+  async expireOrder(orderId: string): Promise<OrderDto> {
+    const orderDoc = await this.orderModel
+      .findById(orderId)
+      .populate('event')
+      .exec();
+    if (!orderDoc) throw new NotFoundException('Orden no encontrada');
+
+    if (orderDoc.status !== OrderStatus.PENDING_PAYMENT) {
+      throw new BadRequestException(
+        'Sólo se podrán caducar las órdenes de pago pendientes',
+      );
+    }
+
+    orderDoc.status = OrderStatus.EXPIRED;
+    await orderDoc.save();
+
+    return toDto(orderDoc, OrderDto);
   }
 
   async updateOrderStatus(
     orderId: string,
     status: OrderStatus,
-  ): Promise<Order> {
+  ): Promise<OrderDto> {
     const order = await this.orderModel
       .findByIdAndUpdate(
         orderId,
         { status, updatedAt: new Date() },
-        { new: true },
+        { new: true, runValidators: true, context: 'query' },
       )
-      .populate('eventId', 'title startDate endDate')
+      .populate('event')
       .exec();
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    return order;
+    if (!order) throw new NotFoundException('Orden no encontrada');
+    return toDto(order, OrderDto);
   }
 
   private async generateOrderNumber(): Promise<string> {

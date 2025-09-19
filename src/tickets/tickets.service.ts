@@ -26,9 +26,9 @@ export class TicketsService {
 
         const ticket = new this.ticketModel({
           ticketNumber,
-          orderId: order._id,
+          orderId: order.id,
           userId: order.userId,
-          eventId: order.eventId,
+          eventId: order.event.id,
           ticketTypeId: item.ticketTypeId,
           ticketTypeName: item.ticketTypeName,
           price: item.unitPrice,

@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { PaymentStatus } from '../../common/enums/payment-status.enum';
-import { PaymentMethod } from '../../common/enums/payment-method.enum';
-import { RefundReason } from '../../common/enums/refund-reason.enum';
+import { PaymentStatus } from 'src/common/enums/payment-status.enum';
+import { PaymentMethod } from 'src/common/enums/payment-method.enum';
+import { RefundReason } from 'src/common/enums/refund-reason.enum';
 import { Currency } from 'src/common/enums/currency.enum';
 
 export type PaymentTransactionDocument = PaymentTransaction & Document;
@@ -25,10 +25,6 @@ export class CardInfo {
   holderName?: string;
 }
 export const CardInfoSchema = SchemaFactory.createForClass(CardInfo);
-
-Object.assign(CardInfoSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 @Schema({
   collection: 'payment_transactions',
@@ -110,10 +106,6 @@ export class PaymentTransaction {
 
 export const PaymentTransactionSchema =
   SchemaFactory.createForClass(PaymentTransaction);
-
-Object.assign(PaymentTransactionSchema.options as any, {
-  skipSoftDeletePlugin: true,
-});
 
 PaymentTransactionSchema.index({ orderId: 1 });
 PaymentTransactionSchema.index({ userId: 1, status: 1 });

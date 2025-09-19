@@ -124,7 +124,6 @@ export class PaymentsService {
 
         await this.ticketsService.generateTicketsForOrder(orderId);
 
-        // TODO: Send confirmation email
         this.sendPaymentConfirmationEmail(order, transaction);
       }
 
