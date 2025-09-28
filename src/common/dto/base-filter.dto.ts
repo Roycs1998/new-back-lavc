@@ -13,7 +13,7 @@ export class BaseFilterDto extends PaginationDto {
   @IsEnum(EntityStatus, {
     message: 'El estado de la entidad no es válido',
   })
-  entityStatus?: EntityStatus = EntityStatus.ACTIVE;
+  entityStatus?: EntityStatus;
 
   @ApiPropertyOptional({
     description: 'Filtrar por fecha de creación (desde)',
