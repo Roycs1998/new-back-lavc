@@ -118,8 +118,8 @@ export class CreateCompanyDto {
     description: 'Correo electrónico de contacto principal',
     example: 'contacto@acme-events.com',
   })
-  @IsEmail()
-  contactEmail!: string;
+  @IsOptional()
+  contactEmail?: string;
 
   @ApiPropertyOptional({
     description: 'Teléfono de contacto',

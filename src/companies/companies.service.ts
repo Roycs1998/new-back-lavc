@@ -53,7 +53,7 @@ export class CompaniesService {
 
   async create(dto: CreateCompanyDto): Promise<CompanyDto> {
     try {
-      const contactEmail = this.normalizeEmail(dto.contactEmail);
+      const contactEmail = this.normalizeEmail(dto.contactEmail ?? '');
       const name = dto.name?.trim();
 
       if (contactEmail) {

@@ -8,9 +8,9 @@ export type CompanyDocument = HydratedDocument<Company>;
 @Schema({ _id: false })
 export class Address {
   @Prop({ trim: true }) street?: string;
-  @Prop({ trim: true, required: true }) city!: string;
+  @Prop({ trim: true }) city?: string;
   @Prop({ trim: true }) state?: string;
-  @Prop({ trim: true, required: true }) country!: string;
+  @Prop({ trim: true }) country?: string;
   @Prop({ trim: true }) zipCode?: string;
 }
 export const AddressSchema = SchemaFactory.createForClass(Address);
@@ -53,8 +53,8 @@ export class Company {
   @Prop({ trim: true })
   website?: string;
 
-  @Prop({ required: true, trim: true, lowercase: true })
-  contactEmail: string;
+  @Prop({ trim: true, lowercase: true })
+  contactEmail?: string;
 
   @Prop({ trim: true })
   contactPhone?: string;
