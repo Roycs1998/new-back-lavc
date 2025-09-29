@@ -61,9 +61,10 @@ export class CreateSpeakerDto {
   @ApiProperty({ example: '66a9d8f7a2a0b7b3e1b0d222' })
   companyId: string;
 
+  @IsOptional()
   @IsString()
   @ApiProperty({ example: 'Gastroenterología' })
-  specialty: string;
+  specialty?: string;
 
   @IsOptional()
   @IsString()
@@ -72,11 +73,12 @@ export class CreateSpeakerDto {
   })
   biography?: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(50)
   @ApiProperty({ example: 8, minimum: 0, maximum: 50 })
-  yearsExperience: number;
+  yearsExperience?: number;
 
   @IsOptional()
   @IsArray()

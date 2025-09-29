@@ -240,13 +240,15 @@ export class SpeakersService {
     updatedBy?: string,
   ): Promise<SpeakerDto> {
     try {
+      const { firstName, lastName, email, phone, ...speakerDto } = dto;
+
       const $set = sanitizeDefined({
-        ...dto,
+        ...speakerDto,
         companyId: dto.companyId ? toObjectId(dto.companyId) : undefined,
         updatedBy: updatedBy ? toObjectId(updatedBy) : undefined,
       });
 
-      const updated = await this.speakerModel
+      const speakerFound = await this.speakerModel
         .findOneAndUpdate(
           { _id: id, entityStatus: { $ne: EntityStatus.DELETED } },
           { $set, $currentDate: { updatedAt: true } },
@@ -255,10 +257,36 @@ export class SpeakersService {
         .populate([{ path: 'person' }, { path: 'company' }])
         .exec();
 
-      if (!updated)
+      if (!speakerFound)
         throw new NotFoundException(`No se encontró el orador con ID ${id}`);
 
-      return toDto(updated, SpeakerDto);
+      const hasPersonPatch =
+        firstName !== undefined ||
+        lastName !== undefined ||
+        email !== undefined ||
+        phone !== undefined;
+
+      if (hasPersonPatch && speakerFound.personId) {
+        const personSet = sanitizeDefined({
+          firstName,
+          lastName,
+          email,
+          phone,
+          updatedBy: updatedBy ? toObjectId(updatedBy) : undefined,
+        });
+
+        await this.personsService.update(
+          speakerFound.personId.toString(),
+          personSet,
+        );
+      }
+
+      const updated = await this.speakerModel
+        .findById(id)
+        .populate([{ path: 'person' }, { path: 'company' }])
+        .exec();
+
+      return toDto(updated!, SpeakerDto);
     } catch (error) {
       throw error;
     }

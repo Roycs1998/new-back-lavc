@@ -3,18 +3,56 @@ import {
   IsOptional,
   IsNumber,
   IsArray,
-  IsObject,
   Min,
   IsEnum,
-  IsNotEmpty,
   IsMongoId,
+  IsUrl,
+  ValidateNested,
 } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { CreatePersonDto } from './create-person.dto';
-import { Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { Currency } from 'src/common/enums/currency.enum';
 
-export class CreateSpeakerWithPersonDto extends CreatePersonDto {
+class SocialMediaCreateDto {
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://www.linkedin.com/in/jdoe' })
+  linkedin?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://twitter.com/jdoe' })
+  twitter?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://jdoe.dev' })
+  website?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @ApiPropertyOptional({ example: 'https://github.com/jdoe' })
+  github?: string;
+}
+
+class AudienceSizeCreateDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @ApiPropertyOptional({ example: 50, minimum: 0 })
+  min?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @ApiPropertyOptional({ example: 300, minimum: 0 })
+  max?: number;
+}
+
+export class CreateSpeakerWithPersonDto extends OmitType(CreatePersonDto, [
+  'type',
+]) {
   @ApiProperty({
     description: 'ID de la empresa del expositor',
     example: '64f14b1a2c4e5a1234567890',
@@ -26,10 +64,9 @@ export class CreateSpeakerWithPersonDto extends CreatePersonDto {
     description: 'Especialidad o área de expertise del expositor',
     example: 'Cardiología veterinaria',
   })
-  @IsNotEmpty({ message: 'La especialidad es requerida' })
+  @IsOptional()
   @IsString({ message: 'La especialidad debe ser texto' })
-  @Transform(({ value }) => value?.trim())
-  specialty: string;
+  specialty?: string;
 
   @ApiPropertyOptional({
     description: 'Biografía del expositor',
@@ -44,9 +81,10 @@ export class CreateSpeakerWithPersonDto extends CreatePersonDto {
     minimum: 0,
     example: 5,
   })
+  @IsOptional()
   @IsNumber({}, { message: 'Los años de experiencia deben ser numéricos' })
   @Min(0, { message: 'Los años de experiencia no pueden ser negativos' })
-  yearsExperience: number;
+  yearsExperience?: number;
 
   @ApiPropertyOptional({
     description: 'Certificaciones profesionales',
@@ -88,47 +126,28 @@ export class CreateSpeakerWithPersonDto extends CreatePersonDto {
   @IsString({ each: true, message: 'Cada tema debe ser texto' })
   topics?: string[];
 
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SocialMediaCreateDto)
   @ApiPropertyOptional({
     description: 'Enlaces a redes sociales',
-    example: {
-      linkedin: 'https://linkedin.com/in/speaker',
-      twitter: 'https://linkedin.com/in/speaker',
-      website: 'https://speaker.com',
-    },
+    example: SocialMediaCreateDto,
   })
-  @IsOptional()
-  @IsObject({ message: 'Las redes sociales deben ser un objeto' })
-  socialMedia?: {
-    linkedin?: string;
-    twitter?: string;
-    website?: string;
-  };
+  socialMedia?: SocialMediaCreateDto;
 
-  @ApiPropertyOptional({
-    description: 'Rango de tamaño de audiencia preferida',
-    example: { min: 20, max: 200 },
-  })
   @IsOptional()
-  @IsObject({ message: 'El tamaño de audiencia debe ser un objeto' })
-  audienceSize?: {
-    min?: number;
-    max?: number;
-  };
+  @ValidateNested()
+  @Type(() => AudienceSizeCreateDto)
+  @ApiPropertyOptional({ type: AudienceSizeCreateDto })
+  audienceSize?: AudienceSizeCreateDto;
 
-  @ApiPropertyOptional({
-    description: 'Notas adicionales sobre el expositor',
-    example: 'Requiere proyector para todas sus presentaciones.',
-  })
   @IsOptional()
-  @IsString({ message: 'Las notas deben ser texto' })
+  @IsString()
+  @ApiPropertyOptional({ example: 'Notas internas del speaker' })
   notes?: string;
 
-  @ApiPropertyOptional({
-    description: 'Moneda para la tarifa por hora',
-    enum: Currency,
-    example: Currency.USD,
-  })
   @IsOptional()
   @IsEnum(Currency)
+  @ApiPropertyOptional({ enum: Currency, example: Currency.PEN })
   currency?: Currency;
 }

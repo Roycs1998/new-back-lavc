@@ -48,7 +48,6 @@ export class CompaniesController {
     description: 'Empresa creada correctamente',
     type: CompanyDto,
   })
-  @ApiResponse({ status: 400, description: 'Datos inválidos o duplicados' })
   create(@Body() dto: CreateCompanyDto): Promise<CompanyDto> {
     return this.companiesService.create(dto);
   }
@@ -73,7 +72,6 @@ export class CompaniesController {
     description: 'Empresa encontrada',
     type: CompanyDto,
   })
-  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   findOne(@Param('id', ParseObjectIdPipe) id: string): Promise<CompanyDto> {
     return this.companiesService.findOne(id);
   }
@@ -86,7 +84,6 @@ export class CompaniesController {
     description: 'Empresa actualizada',
     type: CompanyDto,
   })
-  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: UpdateCompanyDto,
@@ -104,7 +101,6 @@ export class CompaniesController {
     description: 'Estado actualizado',
     type: CompanyDto,
   })
-  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   changeStatus(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: ChangeCompanyStatusDto,
@@ -125,7 +121,6 @@ export class CompaniesController {
     status: 204,
     description: 'Empresa eliminada (soft delete) correctamente',
   })
-  @ApiResponse({ status: 404, description: 'Empresa no encontrada' })
   async remove(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,

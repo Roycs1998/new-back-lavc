@@ -59,14 +59,14 @@ export class Speaker {
   @Prop({ type: Types.ObjectId, ref: 'Company', required: true })
   companyId: Types.ObjectId;
 
-  @Prop({ required: true, trim: true })
-  specialty: string;
+  @Prop({ trim: true, required: false })
+  specialty?: string;
 
   @Prop({ trim: true })
   biography?: string;
 
-  @Prop({ required: true, min: 0, max: 50 })
-  yearsExperience: number;
+  @Prop({ min: 0, max: 50, required: false })
+  yearsExperience?: number;
 
   @Prop({
     type: [String],

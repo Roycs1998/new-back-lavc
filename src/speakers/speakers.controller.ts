@@ -23,6 +23,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -44,7 +45,7 @@ import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 export class SpeakersController {
   constructor(private readonly speakersService: SpeakersService) {}
 
-  @Post('with-person')
+  @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
@@ -54,7 +55,7 @@ export class SpeakersController {
   @ApiBadRequestResponse({
     description: 'Validación fallida o empresa inactiva',
   })
-  createSpeakerWithPerson(
+  create(
     @Body() createSpeakerWithPersonDto: CreateSpeakerWithPersonDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
@@ -74,6 +75,18 @@ export class SpeakersController {
   @ApiOkResponse({ type: SpeakerPaginatedDto })
   findAll(@Query() filterDto: SpeakerFilterDto) {
     return this.speakersService.findAll(filterDto);
+  }
+
+  @Get(':id')
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Obtener una exponente por ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Exponente encontrada',
+    type: SpeakerDto,
+  })
+  findOne(@Param('id', ParseObjectIdPipe) id: string): Promise<SpeakerDto> {
+    return this.speakersService.findOne(id);
   }
 
   @Patch(':id')
