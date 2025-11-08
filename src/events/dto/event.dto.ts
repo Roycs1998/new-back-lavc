@@ -197,6 +197,28 @@ class EventRegistrationViewDto {
   waitlistEnabled!: boolean;
 }
 
+class EventSettingsViewDto {
+  @ApiProperty({ example: false })
+  @Expose()
+  isPrivate!: boolean;
+
+  @ApiProperty({ example: false })
+  @Expose()
+  requiresInvitation!: boolean;
+
+  @ApiPropertyOptional({ example: 18 })
+  @Expose()
+  ageRestriction?: number;
+
+  @ApiPropertyOptional({ example: 'Formal' })
+  @Expose()
+  dresscode?: string;
+
+  @ApiPropertyOptional({ example: 'Ingresar por puerta 3. Traer DNI.' })
+  @Expose()
+  specialInstructions?: string;
+}
+
 export class EventDto {
   @ApiProperty({ example: '66c0da2b6a3aa6ed3c63e001' })
   @Expose()
@@ -297,4 +319,9 @@ export class EventDto {
 
   @ApiPropertyOptional({ description: 'Razón de rechazo si aplica' })
   rejectionReason?: string;
+
+  @ApiPropertyOptional({ type: EventSettingsViewDto })
+  @Type(() => EventSettingsViewDto)
+  @Expose()
+  settings?: EventSettingsViewDto;
 }
