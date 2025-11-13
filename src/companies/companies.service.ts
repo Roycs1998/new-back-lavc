@@ -99,7 +99,7 @@ export class CompaniesService {
       createdFrom,
       createdTo,
       entityStatus,
-    } = (filter ?? {}) as any;
+    } = filter;
 
     const q: Record<string, any> = {};
 

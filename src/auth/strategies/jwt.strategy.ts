@@ -8,7 +8,7 @@ import { EntityStatus } from '../../common/enums/entity-status.enum';
 export interface JwtPayload {
   sub: string;
   email: string;
-  role: string;
+  roles: string[];
   companyId?: string;
   iat?: number;
   exp?: number;
@@ -39,7 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       id: userId,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       companyId: user.company?.id.toString(),
       personId: user.person?.id.toString(),
       emailVerified: user.emailVerified,

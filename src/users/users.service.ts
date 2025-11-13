@@ -22,7 +22,6 @@ import { asDate } from 'src/utils/asDate';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 import { UserDto } from './dto/user.dto';
-import { plainToInstance } from 'class-transformer';
 import { UserPaginatedDto } from './dto/user-pagination.dto';
 import { toDto } from 'src/utils/toDto';
 
@@ -35,12 +34,12 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto): Promise<UserDto> {
-    if (dto.role === UserRole.COMPANY_ADMIN && !dto.companyId) {
+    if (dto.roles?.includes(UserRole.COMPANY_ADMIN) && !dto.companyId) {
       throw new BadRequestException(
         'Se requiere el ID de la empresa para el rol de administrador de la empresa.',
       );
     }
-    if (dto.role !== UserRole.COMPANY_ADMIN && dto.companyId) {
+    if (dto.roles?.includes(UserRole.USER) && dto.companyId) {
       throw new BadRequestException(
         'El ID de la empresa solo debe proporcionarse para el rol de administrador de la empresa.',
       );
@@ -238,16 +237,17 @@ export class UsersService {
 
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+
     return toDto(user, UserDto);
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserDocument> {
-    if (dto.role === UserRole.COMPANY_ADMIN && !dto.companyId) {
+    if (dto.roles?.includes(UserRole.COMPANY_ADMIN) && !dto.companyId) {
       throw new BadRequestException(
         'Se requiere el ID de la empresa para el rol de administrador de la empresa.',
       );
     }
-    if (dto.role !== UserRole.COMPANY_ADMIN && dto.companyId) {
+    if (dto.roles?.includes(UserRole.USER) && dto.companyId) {
       throw new BadRequestException(
         'El ID de la empresa solo debe proporcionarse para el rol de administrador de la empresa.',
       );

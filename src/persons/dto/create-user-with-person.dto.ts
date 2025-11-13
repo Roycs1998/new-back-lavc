@@ -6,10 +6,10 @@ import {
   IsMongoId,
   MinLength,
   IsNotEmpty,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { UserRole } from 'src/common/enums/user-role.enum';
-import { Transform } from 'class-transformer';
 import { CreatePersonDto } from './create-person.dto';
 
 export class CreateUserWithPersonDto extends OmitType(CreatePersonDto, [
@@ -21,7 +21,6 @@ export class CreateUserWithPersonDto extends OmitType(CreatePersonDto, [
     example: 'juan.perez@example.com',
   })
   @IsEmail({}, { message: 'El email debe tener un formato válido' })
-  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
   @ApiProperty({
@@ -37,11 +36,13 @@ export class CreateUserWithPersonDto extends OmitType(CreatePersonDto, [
   @ApiPropertyOptional({
     description: 'Rol del usuario',
     enum: UserRole,
-    default: UserRole.USER,
+    isArray: true,
+    default: [UserRole.USER],
   })
   @IsOptional()
   @IsEnum(UserRole, { message: 'El rol no es válido' })
-  role?: UserRole;
+  @IsArray({ message: 'El rol debe ser una lista' })
+  roles?: UserRole[];
 
   @ApiPropertyOptional({
     description: 'ID de la empresa (requerido para administradores de empresa)',

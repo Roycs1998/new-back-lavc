@@ -53,7 +53,6 @@ export class CompaniesController {
   }
 
   @Get()
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({ summary: 'Listar empresas (filtros + paginación)' })
   @ApiResponse({
     status: 200,

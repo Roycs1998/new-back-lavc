@@ -70,7 +70,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       companyId: user.companyId?.toString(),
     };
 
@@ -107,7 +107,7 @@ export class AuthService {
         phone,
         dateOfBirth,
         password,
-        role: UserRole.USER,
+        roles: [UserRole.USER],
       };
 
       const user =
@@ -271,7 +271,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id.toString(),
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       companyId: user.company?.id.toString(),
     };
 

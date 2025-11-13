@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Exclude, Expose, Transform, Type } from 'class-transformer';
+import { Exclude, Expose, Type } from 'class-transformer';
 import { Currency } from 'src/common/enums/currency.enum';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { UploadSource } from '../entities/speaker.entity';
@@ -40,7 +40,6 @@ class ShortPersonDto {
     example: '64f14b1a2c4e5a1234567890',
   })
   @Expose()
-  @Transform(({ obj }) => obj._id?.toString())
   id: string;
 
   @ApiProperty({
@@ -70,6 +69,13 @@ class ShortPersonDto {
   })
   @Expose()
   fullName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Correo electrónico de la persona',
+    example: 'juan.perez@example.com',
+  })
+  @Expose()
+  email?: string;
 }
 
 class SocialMediaViewDto {
@@ -89,7 +95,6 @@ class SocialMediaViewDto {
   @Expose()
   github?: string;
 }
-
 class AudienceSizeViewDto {
   @ApiPropertyOptional({ example: 50 })
   @Expose()

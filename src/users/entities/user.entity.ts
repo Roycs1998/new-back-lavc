@@ -24,11 +24,11 @@ export class User {
   personId: Types.ObjectId;
 
   @Prop({
-    type: String,
+    type: [String],
     enum: UserRole,
-    default: UserRole.USER,
+    default: [UserRole.USER],
   })
-  role: UserRole;
+  roles: UserRole[];
 
   @Prop({ type: Types.ObjectId, ref: 'Company', required: false })
   companyId?: Types.ObjectId;

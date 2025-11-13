@@ -89,10 +89,11 @@ export class UserDto {
   @ApiProperty({
     description: 'Rol del usuario dentro de la plataforma',
     enum: UserRole,
-    example: UserRole.USER,
+    isArray: true,
+    example: [UserRole.USER],
   })
   @Expose()
-  role: UserRole;
+  roles: UserRole[];
 
   @ApiPropertyOptional({
     description: 'Empresa asociada al usuario',
