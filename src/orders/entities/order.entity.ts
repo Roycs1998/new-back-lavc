@@ -120,6 +120,25 @@ export class Order {
 
   @Prop()
   confirmedAt?: Date;
+
+   @Prop({ type: Types.ObjectId, ref: 'PaymentMethod', required: true })
+  paymentMethodId: Types.ObjectId;
+
+  @Prop({ type: String, trim: true })
+  voucherUrl?: string; 
+
+  @Prop({ type: Date })
+  voucherUploadedAt?: Date; 
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  verifiedBy?: Types.ObjectId; 
+
+  @Prop({ type: Date })
+  verifiedAt?: Date; 
+
+  @Prop({ type: String, trim: true })
+  verificationNotes?: string; 
+
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);
@@ -135,3 +154,12 @@ OrderSchema.index({ userId: 1, status: 1 });
 OrderSchema.index({ eventId: 1, status: 1 });
 OrderSchema.index({ status: 1, expiresAt: 1 });
 OrderSchema.index({ createdAt: -1 });
+
+OrderSchema.virtual('paymentMethod', {
+  ref: 'PaymentMethod',
+  localField: 'paymentMethodId',
+  foreignField: '_id',
+  justOne: true,
+});
+
+OrderSchema.index({ paymentMethodId: 1 });

@@ -18,6 +18,9 @@ import { PaymentsModule } from './payments/payments.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { QRModule } from './qr/qr.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
+import { EmailModule } from './email/email.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -49,8 +52,11 @@ import { AnalyticsModule } from './analytics/analytics.module';
     TicketsModule,
     QRModule,
     AnalyticsModule,
+    PaymentMethodsModule,
+    EmailModule,
+    StorageModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }

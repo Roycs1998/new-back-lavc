@@ -19,6 +19,9 @@ import {
   PaymentTransaction,
   PaymentTransactionDocument,
 } from './entities/payment.entity';
+import { EmailService } from 'src/email/email.service';
+import { Event, EventDocument } from '../events/entities/event.entity';
+import { Company, CompanyDocument } from '../companies/entities/company.entity';
 
 @Injectable()
 export class PaymentsService {
@@ -27,10 +30,17 @@ export class PaymentsService {
   constructor(
     @InjectModel(PaymentTransaction.name)
     private paymentTransactionModel: Model<PaymentTransactionDocument>,
+
+    @InjectModel(Event.name)
+    private eventModel: Model<EventDocument>,
+    @InjectModel(Company.name)
+    private companyModel: Model<CompanyDocument>,
+
     @Inject(forwardRef(() => OrdersService))
     private ordersService: OrdersService,
     @Inject(forwardRef(() => TicketsService))
     private ticketsService: TicketsService,
+    private readonly emailService: EmailService,
     private culqiProvider: CulqiProvider,
   ) {
     this.paymentProviders.set('culqi', this.culqiProvider);
@@ -122,9 +132,11 @@ export class PaymentsService {
       if (result.success) {
         await this.ordersService.updateOrderStatus(orderId, OrderStatus.PAID);
 
-        await this.ticketsService.generateTicketsForOrder(orderId);
+        // 👇 IMPORTANTE: que este método devuelva los tickets
+        const tickets = await this.ticketsService.generateTicketsForOrder(orderId);
 
-        this.sendPaymentConfirmationEmail(order, transaction);
+        // 👇 Enviamos los correos usando EmailService
+        await this.sendPaymentConfirmationEmail(order, transaction, tickets);
       }
 
       return transaction;
@@ -137,6 +149,7 @@ export class PaymentsService {
       throw error;
     }
   }
+
 
   async refundPayment(
     transactionId: string,
@@ -354,12 +367,80 @@ export class PaymentsService {
   private async sendPaymentConfirmationEmail(
     order: any,
     transaction: PaymentTransaction,
+    tickets: any[],
   ): Promise<void> {
-    // TODO: Implement email service integration
-    console.log(
-      `Payment confirmation email sent for order ${order.orderNumber}`,
-    );
+    try {
+      // 1. Obtener evento y empresa
+      const event = await this.eventModel
+        .findById(order.eventId)
+        .populate('companyId')
+        .exec();
+
+      const company =
+        event && (event as any).companyId
+          ? await this.companyModel.findById((event as any).companyId).exec()
+          : null;
+
+      // 2. Construir info de montos
+      const platformFee = transaction['platformFee'] || 0;
+      const providerFee = transaction['paymentProviderFee'] || 0;
+      const netAmount = transaction.amount - platformFee - providerFee;
+      const taxableAmount = transaction.amount / 1.18;
+      const igv = transaction.amount - taxableAmount;
+
+      // 3. Enviar notificaciones de pago (cliente + admins, etc.)
+      const emailResults = await this.emailService.sendAllPaymentNotifications(
+        order.customerInfo.email,
+        {
+          transactionId: transaction.transactionId,
+          orderNumber: order.orderNumber,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          paymentMethod: transaction.paymentMethod,
+          paymentProvider: transaction.paymentProvider,
+          customerName: `${order.customerInfo.firstName} ${order.customerInfo.lastName}`,
+          customerEmail: order.customerInfo.email,
+          customerDocument: order.customerInfo.documentNumber,
+          billingInfo: order.billingInfo, // si lo tienes en la orden
+          eventTitle: event?.title || 'N/A',
+          eventDate: event?.startDate || new Date(),
+          companyName: company?.name || 'N/A',
+          ticketsCount: tickets.length,
+          platformFee,
+          providerFee,
+          netAmount,
+          taxableAmount,
+          igv,
+        },
+      );
+
+      console.log(
+        `Payment notifications sent: ${JSON.stringify(emailResults)}`,
+      );
+
+      // 4. Enviar confirmación de tickets al cliente
+      await this.emailService.sendTicketConfirmation(
+        order.customerInfo.email,
+        order.orderNumber,
+        tickets.map((t) => ({
+          ticketNumber: t.ticketNumber,
+          ticketTypeName: t.ticketTypeName,
+          price: t.price,
+          qrCode: t.qrCode,
+        })),
+        {
+          title: event?.title,
+          startDate: event?.startDate,
+          location: event?.location,
+        },
+      );
+    } catch (error) {
+      console.error(
+        `Error sending payment confirmation emails for order ${order.orderNumber}: ${error.message}`,
+      );
+    }
   }
+
 
   private async sendRefundNotificationEmail(
     transaction: PaymentTransaction,

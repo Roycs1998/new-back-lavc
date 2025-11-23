@@ -224,6 +224,8 @@ export class Event {
   @Prop({ type: EventSettingsSchema, default: {} })
   settings!: EventSettings;
 
+  @Prop({ type: [Types.ObjectId], ref: 'PaymentMethod', default: [] })
+  availablePaymentMethods: Types.ObjectId[]; 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy!: Types.ObjectId;
 
@@ -307,3 +309,5 @@ EventSchema.pre('validate', function (next) {
 
   next();
 });
+
+EventSchema.index({ availablePaymentMethods: 1 });

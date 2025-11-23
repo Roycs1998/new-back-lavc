@@ -9,6 +9,7 @@ import {
 import { OrdersModule } from 'src/orders/orders.module';
 import { TicketsModule } from 'src/tickets/tickets.module';
 import { CulqiProvider } from './providers/culqi.provider';
+import { EmailModule } from 'src/email/email.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { CulqiProvider } from './providers/culqi.provider';
     ]),
     forwardRef(() => OrdersModule),
     forwardRef(() => TicketsModule),
+    EmailModule,
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, CulqiProvider],

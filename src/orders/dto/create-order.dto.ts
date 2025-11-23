@@ -1,4 +1,4 @@
-import { ValidateNested, IsOptional } from 'class-validator';
+import { ValidateNested, IsOptional, IsMongoId } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
@@ -23,4 +23,8 @@ export class CreateOrderDto {
   @ValidateNested()
   @Type(() => BillingInfoDto)
   billingInfo?: BillingInfoDto;
+
+  @ApiProperty({ description: 'ID del método de pago' })
+  @IsMongoId()
+  paymentMethodId: string;
 }

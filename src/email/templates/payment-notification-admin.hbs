@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Nuevo Pago Recibido</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    .container {
+      max-width: 650px;
+      margin: 20px auto;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      padding: 25px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .content {
+      padding: 30px;
+    }
+    .alert {
+      background: #d1ecf1;
+      border-left: 4px solid #0c5460;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 5px;
+      color: #0c5460;
+    }
+    .amount-highlight {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .amount-highlight .amount {
+      font-size: 36px;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    table th {
+      background: #f8f9fa;
+      padding: 10px;
+      text-align: left;
+      font-size: 12px;
+      color: #6c757d;
+      text-transform: uppercase;
+    }
+    table td {
+      padding: 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+    .footer {
+      background: #f8f9fa;
+      padding: 15px;
+      text-align: center;
+      font-size: 12px;
+      color: #6c757d;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💰 Nuevo Pago Recibido</h1>
+      <div class="badge">NOTIFICACIÓN ADMINISTRATIVA</div>
+    </div>
+
+    <div class="content">
+      <div class="alert">
+        <strong>⚡ Acción Automática:</strong> Se ha procesado un nuevo pago y los tickets han sido generados automáticamente.
+      </div>
+
+      <div class="amount-highlight">
+        <div style="font-size: 14px; opacity: 0.9;">MONTO TOTAL</div>
+        <div class="amount">{{currency}} {{amount}}</div>
+        <div style="font-size: 14px; opacity: 0.9;">{{paymentMethod}}</div>
+      </div>
+
+      <h3>📋 Información de la Transacción</h3>
+      <table>
+        <tr>
+          <th>ID Transacción</th>
+          <td>{{transactionId}}</td>
+        </tr>
+        <tr>
+          <th>Nº de Orden</th>
+          <td>{{orderNumber}}</td>
+        </tr>
+        <tr>
+          <th>Proveedor</th>
+          <td>{{paymentProvider}}</td>
+        </tr>
+        <tr>
+          <th>Fecha</th>
+          <td>{{paymentDate}}</td>
+        </tr>
+      </table>
+
+      <h3>👤 Información del Cliente</h3>
+      <table>
+        <tr>
+          <th>Nombre</th>
+          <td>{{customerName}}</td>
+        </tr>
+        <tr>
+          <th>Email</th>
+          <td>{{customerEmail}}</td>
+        </tr>
+        {{#if customerDocument}}
+        <tr>
+          <th>Documento</th>
+          <td>{{customerDocument}}</td>
+        </tr>
+        {{/if}}
+      </table>
+
+      <h3>🎫 Información del Evento</h3>
+      <table>
+        <tr>
+          <th>Evento</th>
+          <td>{{eventTitle}}</td>
+        </tr>
+        <tr>
+          <th>Organizador</th>
+          <td>{{companyName}}</td>
+        </tr>
+        <tr>
+          <th>Tickets Vendidos</th>
+          <td><strong>{{ticketsCount}}</strong></td>
+        </tr>
+      </table>
+
+      {{#if platformFee}}
+      <h3>💵 Desglose de Comisiones</h3>
+      <table>
+        <tr>
+          <th>Concepto</th>
+          <th style="text-align: right;">Monto</th>
+        </tr>
+        <tr>
+          <td>Monto Bruto</td>
+          <td style="text-align: right;">{{currency}} {{amount}}</td>
+        </tr>
+        <tr>
+          <td>Comisión Plataforma</td>
+          <td style="text-align: right;">- {{currency}} {{platformFee}}</td>
+        </tr>
+        {{#if providerFee}}
+        <tr>
+          <td>Comisión {{paymentProvider}}</td>
+          <td style="text-align: right;">- {{currency}} {{providerFee}}</td>
+        </tr>
+        {{/if}}
+        <tr style="background: #d4edda; font-weight: bold;">
+          <td>Monto Neto</td>
+          <td style="text-align: right;">{{currency}} {{netAmount}}</td>
+        </tr>
+      </table>
+      {{/if}}
+    </div>
+
+    <div class="footer">
+      <p>Este es un correo automático del sistema LAVC Platform</p>
+      <p>No responder a este correo</p>
+    </div>
+  </div>
+</body>
+</html>
