@@ -33,6 +33,7 @@ export class PaymentsService {
 
     @InjectModel(Event.name)
     private eventModel: Model<EventDocument>,
+    
     @InjectModel(Company.name)
     private companyModel: Model<CompanyDocument>,
 

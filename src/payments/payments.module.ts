@@ -10,6 +10,9 @@ import { OrdersModule } from 'src/orders/orders.module';
 import { TicketsModule } from 'src/tickets/tickets.module';
 import { CulqiProvider } from './providers/culqi.provider';
 import { EmailModule } from 'src/email/email.module';
+import { EventSchema } from 'src/events/entities/event.entity';
+import { EventsModule } from 'src/events/events.module';
+import { CompaniesModule } from 'src/companies/companies.module';
 
 @Module({
   imports: [
@@ -19,6 +22,8 @@ import { EmailModule } from 'src/email/email.module';
     forwardRef(() => OrdersModule),
     forwardRef(() => TicketsModule),
     EmailModule,
+    EventsModule,
+    CompaniesModule,
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, CulqiProvider],

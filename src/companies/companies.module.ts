@@ -10,6 +10,6 @@ import { Company, CompanySchema } from './entities/company.entity';
   ],
   controllers: [CompaniesController],
   providers: [CompaniesService],
-  exports: [CompaniesService],
+  exports: [CompaniesService, MongooseModule],
 })
 export class CompaniesModule {}

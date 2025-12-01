@@ -18,6 +18,6 @@ import { SpeakersModule } from 'src/speakers/speakers.module';
   ],
   controllers: [EventsController],
   providers: [EventsService],
-  exports: [EventsService],
+  exports: [EventsService, MongooseModule],
 })
 export class EventsModule {}
