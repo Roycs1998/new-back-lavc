@@ -131,8 +131,8 @@ export class CompaniesService {
     if (this.isValidDate(createdFrom) || this.isValidDate(createdTo)) {
       q.createdAt = {};
       if (this.isValidDate(createdFrom))
-        q.createdAt.$gte = new Date(createdFrom!);
-      if (this.isValidDate(createdTo)) q.createdAt.$lte = new Date(createdTo!);
+        q.createdAt.$gte = new Date(createdFrom);
+      if (this.isValidDate(createdTo)) q.createdAt.$lte = new Date(createdTo);
     }
 
     const perPage = Math.min(100, Math.max(1, Number(limit)));
@@ -240,12 +240,12 @@ export class CompaniesService {
         entityStatus: status,
         ...(changedBy ? { updatedBy: toObjectId(changedBy) } : {}),
       },
-      $currentDate: { updatedAt: true as true },
+      $currentDate: { updatedAt: true as const },
     };
 
     if (status === EntityStatus.DELETED) {
       if (changedBy) update.$set.deletedBy = toObjectId(changedBy);
-      update.$currentDate.deletedAt = true as true; // registra fecha/hora de eliminación
+      update.$currentDate.deletedAt = true as const; // registra fecha/hora de eliminación
     } else {
       update.$unset = { deletedAt: '', deletedBy: '' };
     }

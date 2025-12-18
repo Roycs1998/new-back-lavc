@@ -33,7 +33,7 @@ export class PaymentsService {
 
     @InjectModel(Event.name)
     private eventModel: Model<EventDocument>,
-    
+
     @InjectModel(Company.name)
     private companyModel: Model<CompanyDocument>,
 
@@ -134,7 +134,8 @@ export class PaymentsService {
         await this.ordersService.updateOrderStatus(orderId, OrderStatus.PAID);
 
         // 👇 IMPORTANTE: que este método devuelva los tickets
-        const tickets = await this.ticketsService.generateTicketsForOrder(orderId);
+        const tickets =
+          await this.ticketsService.generateTicketsForOrder(orderId);
 
         // 👇 Enviamos los correos usando EmailService
         await this.sendPaymentConfirmationEmail(order, transaction, tickets);
@@ -150,7 +151,6 @@ export class PaymentsService {
       throw error;
     }
   }
-
 
   async refundPayment(
     transactionId: string,
@@ -441,7 +441,6 @@ export class PaymentsService {
       );
     }
   }
-
 
   private async sendRefundNotificationEmail(
     transaction: PaymentTransaction,

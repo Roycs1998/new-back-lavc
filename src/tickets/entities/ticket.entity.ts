@@ -4,6 +4,7 @@ import { EntityStatus } from '../../common/enums/entity-status.enum';
 import { TicketLifecycleStatus } from 'src/common/enums/ticket-lifecycle-status.enum';
 import { Currency } from 'src/common/enums/currency.enum';
 import { DocumentType } from 'src/common/enums/document-type.enum';
+import { ParticipantType } from 'src/common/enums/participant-type.enum';
 
 export type TicketDocument = Ticket & Document;
 
@@ -39,8 +40,8 @@ export class Ticket {
   @Prop({ required: true, unique: true, index: true })
   ticketNumber: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Order', required: true })
-  orderId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Order', required: false })
+  orderId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
@@ -97,6 +98,15 @@ export class Ticket {
 
   @Prop()
   transferredAt?: Date;
+
+  @Prop({ type: String, enum: ['order', 'invitation'], default: 'order' })
+  sourceType!: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'EventParticipant' })
+  sourceId?: Types.ObjectId;
+
+  @Prop({ type: String, enum: Object.values(ParticipantType) })
+  participantType?: ParticipantType;
 }
 
 export const TicketSchema = SchemaFactory.createForClass(Ticket);
@@ -108,3 +118,4 @@ Object.assign(AttendeeInfoSchema.options as any, {
 TicketSchema.index({ orderId: 1 });
 TicketSchema.index({ userId: 1, status: 1 });
 TicketSchema.index({ eventId: 1, status: 1 });
+TicketSchema.index({ sourceType: 1, sourceId: 1 });

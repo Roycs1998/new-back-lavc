@@ -25,6 +25,7 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CompanyScopeGuard } from 'src/common/guards/company-scope.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ParseObjectIdPipe } from 'src/common/pipes/parse-object-id.pipe';
+import { OperationalStaffOrAdminGuard } from 'src/common/guards/operational-staff-or-admin.guard';
 
 @ApiTags('Códigos QR')
 @ApiBearerAuth('JWT-auth')
@@ -64,7 +65,7 @@ export class QRController {
   }
 
   @Post('validate')
-  @UseGuards(RolesGuard, CompanyScopeGuard)
+  @UseGuards(OperationalStaffOrAdminGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EVENT_STAFF)
   @ApiOperation({
     summary: 'Validar código QR para entrada al evento',
@@ -129,7 +130,7 @@ export class QRController {
   }
 
   @Get('validate/history/:ticketId')
-  @UseGuards(RolesGuard, CompanyScopeGuard)
+  @UseGuards(OperationalStaffOrAdminGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EVENT_STAFF)
   @ApiOperation({
     summary: 'Obtener historial de validaciones de un ticket',
@@ -155,7 +156,7 @@ export class QRController {
   }
 
   @Get('event/:eventId/stats')
-  @UseGuards(RolesGuard, CompanyScopeGuard)
+  @UseGuards(OperationalStaffOrAdminGuard)
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EVENT_STAFF)
   @ApiOperation({
     summary: 'Obtener estadísticas de acceso al evento',

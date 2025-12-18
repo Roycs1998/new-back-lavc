@@ -225,7 +225,8 @@ export class Event {
   settings!: EventSettings;
 
   @Prop({ type: [Types.ObjectId], ref: 'PaymentMethod', default: [] })
-  availablePaymentMethods: Types.ObjectId[]; 
+  availablePaymentMethods: Types.ObjectId[];
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy!: Types.ObjectId;
 
@@ -281,7 +282,7 @@ EventSchema.pre('validate', function (next) {
     return next(new Error('registration.closesAt must be before startDate'));
   }
 
-  const loc = this.location as EventLocation;
+  const loc = this.location;
   if (
     loc?.type === EventLocationType.PHYSICAL ||
     loc?.type === EventLocationType.HYBRID

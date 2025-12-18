@@ -6,7 +6,7 @@ import {
 import { Types } from 'mongoose';
 
 export function IsValidObjectId(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isValidObjectId',
       target: object.constructor,

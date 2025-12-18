@@ -21,7 +21,9 @@ export class EmailService {
       process.env.ACCOUNTANT_EMAIL;
 
     if (!this.adminEmail || !this.accountantEmail) {
-      this.logger.warn('Admin or Accountant email not configured in environment variables');
+      this.logger.warn(
+        'Admin or Accountant email not configured in environment variables',
+      );
     }
   }
 
@@ -47,9 +49,13 @@ export class EmailService {
 
   // ============= MÉTODOS ESPECÍFICOS =============
 
-  async sendWelcomeEmail(email: string, name: string, verificationToken: string) {
+  async sendWelcomeEmail(
+    email: string,
+    name: string,
+    verificationToken: string,
+  ) {
     const verificationUrl = `${this.configService.get('APP_URL')}/auth/verify-email?token=${verificationToken}`;
-    
+
     return this.sendEmail({
       to: email,
       subject: 'Bienvenido a LAVC - Verifica tu email',
@@ -82,7 +88,7 @@ export class EmailService {
 
   async sendPasswordResetEmail(email: string, resetToken: string) {
     const resetUrl = `${this.configService.get('APP_URL')}/auth/reset-password?token=${resetToken}`;
-    
+
     return this.sendEmail({
       to: email,
       subject: 'Restablecer contraseña',
@@ -155,26 +161,24 @@ export class EmailService {
     });
   }
 
-  async sendPaymentNotificationToAdmin(
-    paymentDetails: {
-      transactionId: string;
-      orderNumber: string;
-      amount: number;
-      currency: string;
-      paymentMethod: string;
-      paymentProvider: string;
-      customerName: string;
-      customerEmail: string;
-      customerDocument?: string;
-      eventTitle: string;
-      eventDate: Date;
-      companyName: string;
-      ticketsCount: number;
-      platformFee?: number;
-      providerFee?: number;
-      netAmount?: number;
-    },
-  ): Promise<boolean> {
+  async sendPaymentNotificationToAdmin(paymentDetails: {
+    transactionId: string;
+    orderNumber: string;
+    amount: number;
+    currency: string;
+    paymentMethod: string;
+    paymentProvider: string;
+    customerName: string;
+    customerEmail: string;
+    customerDocument?: string;
+    eventTitle: string;
+    eventDate: Date;
+    companyName: string;
+    ticketsCount: number;
+    platformFee?: number;
+    providerFee?: number;
+    netAmount?: number;
+  }): Promise<boolean> {
     if (!this.adminEmail) {
       this.logger.warn('Admin email not configured, skipping notification');
       return false;
@@ -198,35 +202,35 @@ export class EmailService {
     });
   }
 
-  async sendPaymentNotificationToAccountant(
-    paymentDetails: {
-      transactionId: string;
-      orderNumber: string;
-      amount: number;
-      currency: string;
-      paymentMethod: string;
-      paymentProvider: string;
-      customerName: string;
-      customerEmail: string;
-      customerDocument?: string;
-      billingInfo?: {
-        companyName?: string;
-        ruc?: string;
-        address?: string;
-      };
-      eventTitle: string;
-      eventDate: Date;
-      companyName: string;
-      ticketsCount: number;
-      platformFee?: number;
-      providerFee?: number;
-      netAmount?: number;
-      taxableAmount?: number;
-      igv?: number;
-    },
-  ): Promise<boolean> {
+  async sendPaymentNotificationToAccountant(paymentDetails: {
+    transactionId: string;
+    orderNumber: string;
+    amount: number;
+    currency: string;
+    paymentMethod: string;
+    paymentProvider: string;
+    customerName: string;
+    customerEmail: string;
+    customerDocument?: string;
+    billingInfo?: {
+      companyName?: string;
+      ruc?: string;
+      address?: string;
+    };
+    eventTitle: string;
+    eventDate: Date;
+    companyName: string;
+    ticketsCount: number;
+    platformFee?: number;
+    providerFee?: number;
+    netAmount?: number;
+    taxableAmount?: number;
+    igv?: number;
+  }): Promise<boolean> {
     if (!this.accountantEmail) {
-      this.logger.warn('Accountant email not configured, skipping notification');
+      this.logger.warn(
+        'Accountant email not configured, skipping notification',
+      );
       return false;
     }
 
@@ -283,18 +287,22 @@ export class EmailService {
     admin: boolean;
     accountant: boolean;
   }> {
-    this.logger.log(`Sending payment notifications for transaction ${paymentDetails.transactionId}`);
+    this.logger.log(
+      `Sending payment notifications for transaction ${paymentDetails.transactionId}`,
+    );
 
-    const [customerResult, adminResult, accountantResult] = await Promise.allSettled([
-      this.sendPaymentConfirmationToCustomer(customerEmail, paymentDetails),
-      this.sendPaymentNotificationToAdmin(paymentDetails),
-      this.sendPaymentNotificationToAccountant(paymentDetails),
-    ]);
+    const [customerResult, adminResult, accountantResult] =
+      await Promise.allSettled([
+        this.sendPaymentConfirmationToCustomer(customerEmail, paymentDetails),
+        this.sendPaymentNotificationToAdmin(paymentDetails),
+        this.sendPaymentNotificationToAccountant(paymentDetails),
+      ]);
 
     const results = {
       customer: customerResult.status === 'fulfilled' && customerResult.value,
       admin: adminResult.status === 'fulfilled' && adminResult.value,
-      accountant: accountantResult.status === 'fulfilled' && accountantResult.value,
+      accountant:
+        accountantResult.status === 'fulfilled' && accountantResult.value,
     };
 
     this.logger.log(`Payment notifications sent: ${JSON.stringify(results)}`);
@@ -310,7 +318,9 @@ export class EmailService {
     voucherUrl: string,
   ): Promise<boolean> {
     if (!this.adminEmail) {
-      this.logger.warn('Admin email not configured, skipping voucher notification');
+      this.logger.warn(
+        'Admin email not configured, skipping voucher notification',
+      );
       return false;
     }
 

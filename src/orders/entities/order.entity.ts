@@ -121,24 +121,23 @@ export class Order {
   @Prop()
   confirmedAt?: Date;
 
-   @Prop({ type: Types.ObjectId, ref: 'PaymentMethod', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'PaymentMethod', required: true })
   paymentMethodId: Types.ObjectId;
 
   @Prop({ type: String, trim: true })
-  voucherUrl?: string; 
+  voucherUrl?: string;
 
   @Prop({ type: Date })
-  voucherUploadedAt?: Date; 
+  voucherUploadedAt?: Date;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
-  verifiedBy?: Types.ObjectId; 
+  verifiedBy?: Types.ObjectId;
 
   @Prop({ type: Date })
-  verifiedAt?: Date; 
+  verifiedAt?: Date;
 
   @Prop({ type: String, trim: true })
-  verificationNotes?: string; 
-
+  verificationNotes?: string;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

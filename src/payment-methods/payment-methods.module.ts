@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PaymentMethodsController } from './payment-methods.controller';
 import { PaymentMethodsService } from './payment-methods.service';
-import { PaymentMethod, PaymentMethodSchema } from './entities/payment-method.entity';
+import {
+  PaymentMethod,
+  PaymentMethodSchema,
+} from './entities/payment-method.entity';
 
 @Module({
   imports: [

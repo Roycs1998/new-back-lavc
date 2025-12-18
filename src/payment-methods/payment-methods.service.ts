@@ -89,10 +89,7 @@ export class PaymentMethodsService {
     };
 
     if (companyId) {
-      query.$or = [
-        { companyId: null },
-        { companyId: toObjectId(companyId) },
-      ];
+      query.$or = [{ companyId: null }, { companyId: toObjectId(companyId) }];
     } else {
       query.companyId = null;
     }
@@ -103,7 +100,6 @@ export class PaymentMethodsService {
       .sort({ displayOrder: 1 })
       .exec();
   }
-
 
   async findOne(id: string): Promise<PaymentMethodDocument> {
     const paymentMethod = await this.paymentMethodModel
@@ -137,7 +133,6 @@ export class PaymentMethodsService {
     return paymentMethod;
   }
 
-
   async update(
     id: string,
     updateDto: UpdatePaymentMethodDto,
@@ -158,11 +153,7 @@ export class PaymentMethodsService {
     return paymentMethod;
   }
 
-
-  async softDelete(
-    id: string,
-    userId: string,
-  ): Promise<{ deleted: boolean }> {
+  async softDelete(id: string, userId: string): Promise<{ deleted: boolean }> {
     const paymentMethod = await this.findOne(id);
 
     paymentMethod.entityStatus = EntityStatus.DELETED;
@@ -174,7 +165,6 @@ export class PaymentMethodsService {
 
     return { deleted: true };
   }
-
 
   async toggleActive(id: string): Promise<PaymentMethodDocument> {
     const paymentMethod = await this.findOne(id);

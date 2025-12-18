@@ -55,93 +55,93 @@ export class OrdersService {
     return orders.map((o) => toDto(o, OrderDto));
   }
 
-private async createSingleOrder(
-  userId: string,
-  eventId: string,
-  cartItems: any[],
-  createOrderDto: CreateOrderDto,
-): Promise<OrderDocument> {
-  const orderNumber = await this.generateOrderNumber();
+  private async createSingleOrder(
+    userId: string,
+    eventId: string,
+    cartItems: any[],
+    createOrderDto: CreateOrderDto,
+  ): Promise<OrderDocument> {
+    const orderNumber = await this.generateOrderNumber();
 
-  const currencies = new Set<string>(
-    cartItems.map((it) => String(it.currency)),
-  );
-  if (currencies.size > 1) {
-    throw new BadRequestException(
-      'Todos los artículos de un pedido deben compartir la misma moneda',
+    const currencies = new Set<string>(
+      cartItems.map((it) => String(it.currency)),
     );
-  }
-
-  const currency = (cartItems[0]?.currency as string) ?? 'PEN';
-
-  let subtotal = 0;
-
-  const orderItems = cartItems.map((item) => {
-    const ticketType =
-      item.ticketTypeId && typeof item.ticketTypeId === 'object'
-        ? item.ticketTypeId
-        : {};
-    const ticketTypeId =
-      ticketType?._id?.toString?.() ?? item.ticketTypeId?.toString?.();
-    const ticketTypeName = ticketType?.name ?? item.ticketTypeName;
-
-    if (!ticketTypeId || !ticketTypeName) {
+    if (currencies.size > 1) {
       throw new BadRequestException(
-        'Artículo de carrito no válido: faltan datos del tipo de ticket',
+        'Todos los artículos de un pedido deben compartir la misma moneda',
       );
     }
 
-    const itemTotal = Number(item.quantity) * Number(item.unitPrice);
-    subtotal += itemTotal;
+    const currency = (cartItems[0]?.currency as string) ?? 'PEN';
 
-    return {
-      ticketTypeId: new Types.ObjectId(ticketTypeId),
-      ticketTypeName,
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice),
-      totalPrice: itemTotal,
+    let subtotal = 0;
+
+    const orderItems = cartItems.map((item) => {
+      const ticketType =
+        item.ticketTypeId && typeof item.ticketTypeId === 'object'
+          ? item.ticketTypeId
+          : {};
+      const ticketTypeId =
+        ticketType?._id?.toString?.() ?? item.ticketTypeId?.toString?.();
+      const ticketTypeName = ticketType?.name ?? item.ticketTypeName;
+
+      if (!ticketTypeId || !ticketTypeName) {
+        throw new BadRequestException(
+          'Artículo de carrito no válido: faltan datos del tipo de ticket',
+        );
+      }
+
+      const itemTotal = Number(item.quantity) * Number(item.unitPrice);
+      subtotal += itemTotal;
+
+      return {
+        ticketTypeId: new Types.ObjectId(ticketTypeId),
+        ticketTypeName,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        totalPrice: itemTotal,
+        currency,
+      };
+    });
+
+    const total = subtotal;
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    // 👇 Validamos y convertimos el paymentMethodId
+    if (!createOrderDto.paymentMethodId) {
+      throw new BadRequestException('paymentMethodId is required');
+    }
+
+    const created = await this.orderModel.create({
+      orderNumber,
+      userId: new Types.ObjectId(userId),
+      eventId: new Types.ObjectId(eventId),
+
+      // ✨ AQUÍ ES DONDE METEMOS EL CAMPO NUEVO
+      paymentMethodId: new Types.ObjectId(createOrderDto.paymentMethodId),
+
+      items: orderItems,
+      subtotal,
+      discountAmount: 0,
+      total,
       currency,
-    };
-  });
+      status: OrderStatus.PENDING_PAYMENT,
+      customerInfo: createOrderDto.customerInfo,
+      billingInfo: createOrderDto.billingInfo,
+      expiresAt,
+      entityStatus: EntityStatus.ACTIVE,
+    });
 
-  const total = subtotal;
+    const order = await this.orderModel.findById(created._id).populate('event');
 
-  const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+    if (!order) {
+      throw new NotFoundException('Orden no encontrada');
+    }
 
-  // 👇 Validamos y convertimos el paymentMethodId
-  if (!createOrderDto.paymentMethodId) {
-    throw new BadRequestException('paymentMethodId is required');
+    return order;
   }
-
-  const created = await this.orderModel.create({
-    orderNumber,
-    userId: new Types.ObjectId(userId),
-    eventId: new Types.ObjectId(eventId),
-
-    // ✨ AQUÍ ES DONDE METEMOS EL CAMPO NUEVO
-    paymentMethodId: new Types.ObjectId(createOrderDto.paymentMethodId),
-
-    items: orderItems,
-    subtotal,
-    discountAmount: 0,
-    total,
-    currency,
-    status: OrderStatus.PENDING_PAYMENT,
-    customerInfo: createOrderDto.customerInfo,
-    billingInfo: createOrderDto.billingInfo,
-    expiresAt,
-    entityStatus: EntityStatus.ACTIVE,
-  });
-
-  const order = await this.orderModel.findById(created._id).populate('event');
-
-  if (!order) {
-    throw new NotFoundException('Orden no encontrada');
-  }
-
-  return order;
-}
 
   async findUserOrders(userId: string): Promise<OrderDto[]> {
     const docs = await this.orderModel

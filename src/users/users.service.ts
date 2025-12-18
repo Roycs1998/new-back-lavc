@@ -469,4 +469,149 @@ export class UsersService {
       .populate([{ path: 'person' }, { path: 'company' }])
       .exec();
   }
+
+  async getAllStaffRoles(userId: string) {
+    const now = new Date();
+
+    // 1. Buscar asignaciones de staff operativo
+    const operationalStaffAssignments = await this.userModel
+      .aggregate([
+        { $match: { _id: new Types.ObjectId(userId) } },
+        {
+          $lookup: {
+            from: 'event_participants',
+            let: { userId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$userId', '$$userId'] },
+                      { $eq: ['$participantType', 'operational_staff'] },
+                      { $eq: ['$isActive', true] },
+                    ],
+                  },
+                },
+              },
+              {
+                $lookup: {
+                  from: 'events',
+                  localField: 'eventId',
+                  foreignField: '_id',
+                  as: 'event',
+                },
+              },
+              { $unwind: '$event' },
+            ],
+            as: 'operationalStaff',
+          },
+        },
+        {
+          $lookup: {
+            from: 'event_participants',
+            let: { userId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$userId', '$$userId'] },
+                      { $eq: ['$participantType', 'staff'] },
+                      { $eq: ['$isActive', true] },
+                    ],
+                  },
+                },
+              },
+              {
+                $lookup: {
+                  from: 'events',
+                  localField: 'eventId',
+                  foreignField: '_id',
+                  as: 'event',
+                },
+              },
+              { $unwind: '$event' },
+              {
+                $lookup: {
+                  from: 'event_sponsors',
+                  localField: 'eventSponsorId',
+                  foreignField: '_id',
+                  as: 'sponsor',
+                },
+              },
+              {
+                $unwind: { path: '$sponsor', preserveNullAndEmptyArrays: true },
+              },
+              {
+                $lookup: {
+                  from: 'companies',
+                  localField: 'sponsor.companyId',
+                  foreignField: '_id',
+                  as: 'company',
+                },
+              },
+              {
+                $unwind: { path: '$company', preserveNullAndEmptyArrays: true },
+              },
+            ],
+            as: 'sponsorStaff',
+          },
+        },
+      ])
+      .exec();
+
+    if (
+      !operationalStaffAssignments ||
+      operationalStaffAssignments.length === 0
+    ) {
+      return {
+        hasStaffRoles: false,
+        operationalStaff: [],
+        sponsorStaff: [],
+      };
+    }
+
+    const result = operationalStaffAssignments[0];
+
+    // Filtrar staff operativo (eventos no finalizados)
+    const operationalStaff = (result.operationalStaff || [])
+      .filter((assignment: any) => {
+        const event = assignment.event;
+        return event.endDate && now <= new Date(event.endDate);
+      })
+      .map((assignment: any) => ({
+        eventId: assignment.event._id.toString(),
+        eventTitle: assignment.event.title,
+        eventStartDate: assignment.event.startDate,
+        eventEndDate: assignment.event.endDate,
+        participantId: assignment._id.toString(),
+        role: 'operational_staff',
+        canAccess: true,
+      }));
+
+    // Filtrar staff de sponsor (sponsors activos)
+    const sponsorStaff = (result.sponsorStaff || [])
+      .filter((assignment: any) => {
+        const event = assignment.event;
+        const sponsor = assignment.sponsor;
+        return (
+          event.endDate && now <= new Date(event.endDate) && sponsor?.isActive
+        );
+      })
+      .map((assignment: any) => ({
+        eventId: assignment.event._id.toString(),
+        eventTitle: assignment.event.title,
+        sponsorId: assignment.sponsor?._id.toString(),
+        sponsorName: assignment.company?.name || 'Sponsor',
+        participantId: assignment._id.toString(),
+        role: 'sponsor_staff',
+        canAccess: true,
+      }));
+
+    return {
+      hasStaffRoles: operationalStaff.length > 0 || sponsorStaff.length > 0,
+      operationalStaff,
+      sponsorStaff,
+    };
+  }
 }

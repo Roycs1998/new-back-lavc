@@ -162,4 +162,55 @@ export class UsersController {
   ): Promise<void> {
     await this.usersService.softDelete(id, currentUser.id);
   }
+
+  @Get('me/staff-roles')
+  @Roles(UserRole.USER, UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({
+    summary: 'Obtener roles de staff del usuario autenticado',
+    description:
+      'Retorna los eventos donde el usuario es staff operativo y los sponsors donde es staff de sponsor',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Roles de staff obtenidos correctamente',
+    schema: {
+      type: 'object',
+      properties: {
+        hasStaffRoles: { type: 'boolean' },
+        operationalStaff: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              eventId: { type: 'string' },
+              eventTitle: { type: 'string' },
+              eventStartDate: { type: 'string' },
+              eventEndDate: { type: 'string' },
+              participantId: { type: 'string' },
+              role: { type: 'string' },
+              canAccess: { type: 'boolean' },
+            },
+          },
+        },
+        sponsorStaff: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              eventId: { type: 'string' },
+              eventTitle: { type: 'string' },
+              sponsorId: { type: 'string' },
+              sponsorName: { type: 'string' },
+              participantId: { type: 'string' },
+              role: { type: 'string' },
+              canAccess: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+  })
+  getMyStaffRoles(@CurrentUser() currentUser: CurrentUserData) {
+    return this.usersService.getAllStaffRoles(currentUser.id);
+  }
 }

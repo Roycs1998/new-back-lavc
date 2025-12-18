@@ -38,7 +38,11 @@ export class PaymentMethodsController {
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Create payment method' })
-  @ApiResponse({ status: 201, description: 'Payment method created', type: PaymentMethodDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Payment method created',
+    type: PaymentMethodDto,
+  })
   async create(
     @Body() createDto: CreatePaymentMethodDto,
     @CurrentUser() user: any,
@@ -52,7 +56,11 @@ export class PaymentMethodsController {
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all payment methods (admin)' })
-  @ApiResponse({ status: 200, description: 'List of payment methods', type: [PaymentMethodDto] })
+  @ApiResponse({
+    status: 200,
+    description: 'List of payment methods',
+    type: [PaymentMethodDto],
+  })
   async findAll(@Query() filter: PaymentMethodFilterDto) {
     const results = await this.service.findAll(filter);
     return results.map((r) => toDto(r, PaymentMethodDto));
@@ -61,12 +69,19 @@ export class PaymentMethodsController {
   @Get('available')
   @Public()
   @ApiOperation({ summary: 'Get available payment methods (public + company)' })
-  @ApiResponse({ status: 200, description: 'Available payment methods', type: [PaymentMethodDto] })
+  @ApiResponse({
+    status: 200,
+    description: 'Available payment methods',
+    type: [PaymentMethodDto],
+  })
   async getAvailablePaymentMethods(
     @Query('companyId') companyId?: string,
     @Query('eventId') eventId?: string,
   ) {
-    const results = await this.service.getAvailablePaymentMethods(companyId, eventId);
+    const results = await this.service.getAvailablePaymentMethods(
+      companyId,
+      eventId,
+    );
     return results.map((r) => toDto(r, PaymentMethodDto));
   }
 
@@ -75,7 +90,11 @@ export class PaymentMethodsController {
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get payment method by ID' })
-  @ApiResponse({ status: 200, description: 'Payment method details', type: PaymentMethodDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment method details',
+    type: PaymentMethodDto,
+  })
   async findOne(@Param('id') id: string) {
     const result = await this.service.findOne(id);
     return toDto(result, PaymentMethodDto);
@@ -86,7 +105,11 @@ export class PaymentMethodsController {
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update payment method' })
-  @ApiResponse({ status: 200, description: 'Payment method updated', type: PaymentMethodDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment method updated',
+    type: PaymentMethodDto,
+  })
   async update(
     @Param('id') id: string,
     @Body() updateDto: UpdatePaymentMethodDto,
@@ -101,7 +124,11 @@ export class PaymentMethodsController {
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Toggle payment method active status' })
-  @ApiResponse({ status: 200, description: 'Status toggled', type: PaymentMethodDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Status toggled',
+    type: PaymentMethodDto,
+  })
   async toggleActive(@Param('id') id: string) {
     const result = await this.service.toggleActive(id);
     return toDto(result, PaymentMethodDto);
@@ -113,10 +140,7 @@ export class PaymentMethodsController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Soft delete payment method' })
   @ApiResponse({ status: 200, description: 'Payment method deleted' })
-  async softDelete(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async softDelete(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.softDelete(id, user._id);
   }
 }

@@ -155,13 +155,13 @@ export class SpeakersService {
 
     if (minYears != null || maxYears != null) {
       q.yearsExperience = {};
-      if (minYears != null) (q.yearsExperience as any).$gte = Number(minYears);
-      if (maxYears != null) (q.yearsExperience as any).$lte = Number(maxYears);
+      if (minYears != null) q.yearsExperience.$gte = Number(minYears);
+      if (maxYears != null) q.yearsExperience.$lte = Number(maxYears);
     }
     if (minRate != null || maxRate != null) {
       q.hourlyRate = {};
-      if (minRate != null) (q.hourlyRate as any).$gte = Number(minRate);
-      if (maxRate != null) (q.hourlyRate as any).$lte = Number(maxRate);
+      if (minRate != null) q.hourlyRate.$gte = Number(minRate);
+      if (maxRate != null) q.hourlyRate.$lte = Number(maxRate);
     }
 
     if (currency) q.currency = currency;
@@ -169,8 +169,8 @@ export class SpeakersService {
 
     if (createdFrom || createdTo) {
       q.createdAt = {};
-      if (createdFrom) (q.createdAt as any).$gte = new Date(createdFrom);
-      if (createdTo) (q.createdAt as any).$lte = new Date(createdTo);
+      if (createdFrom) q.createdAt.$gte = new Date(createdFrom);
+      if (createdTo) q.createdAt.$lte = new Date(createdTo);
     }
 
     const sortObj: Record<string, 1 | -1> = {};

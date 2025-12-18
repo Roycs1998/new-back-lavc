@@ -1,0 +1,140 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiParam,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
+} from '@nestjs/swagger';
+import { ParseObjectIdPipe } from '@nestjs/mongoose';
+import { SponsorInvitationsService } from './sponsor-invitations.service';
+import { CreateSponsorInvitationDto } from './dto/create-sponsor-invitation.dto';
+import { UpdateSponsorInvitationDto } from './dto/update-sponsor-invitation.dto';
+import { SponsorInvitationDto } from './dto/sponsor-invitation.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { CurrentUserData } from '../common/decorators/current-user.decorator';
+
+@ApiTags('Invitaciones de Staff Operativo')
+@Controller('events/:eventId/operational-staff-invitations')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT-auth')
+export class OperationalStaffInvitationsController {
+  constructor(private readonly invitationsService: SponsorInvitationsService) {}
+
+  @Post()
+  @Roles(UserRole.PLATFORM_ADMIN)
+  @ApiOperation({
+    summary: 'Crear invitación para staff operativo (solo PLATFORM_ADMIN)',
+    description:
+      'Genera un código único de invitación para que usuarios se registren como staff operativo del evento.',
+  })
+  @ApiParam({
+    name: 'eventId',
+    description: 'ID del evento',
+    example: '66c0da2b6a3aa6ed3c63e001',
+  })
+  @ApiCreatedResponse({
+    type: SponsorInvitationDto,
+    description: 'Invitación creada exitosamente',
+  })
+  @ApiBadRequestResponse({
+    description: 'Parámetros inválidos',
+  })
+  async createInvitation(
+    @Param('eventId', ParseObjectIdPipe) eventId: string,
+    @Body() createDto: CreateSponsorInvitationDto,
+    @CurrentUser() currentUser: CurrentUserData,
+  ) {
+    // Para staff operativo, pasamos el eventId como sponsorId
+    return await this.invitationsService.createInvitation(
+      eventId,
+      createDto,
+      currentUser.id,
+    );
+  }
+
+  @Get()
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({
+    summary: 'Listar invitaciones de staff operativo del evento',
+  })
+  @ApiParam({
+    name: 'eventId',
+    description: 'ID del evento',
+  })
+  @ApiOkResponse({
+    type: [SponsorInvitationDto],
+    description: 'Lista de invitaciones',
+  })
+  async getInvitations(@Param('eventId', ParseObjectIdPipe) eventId: string) {
+    return await this.invitationsService.getInvitationsByEvent(eventId);
+  }
+
+  @Get(':invitationId')
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Obtener detalles de una invitación' })
+  @ApiParam({ name: 'invitationId', description: 'ID de la invitación' })
+  @ApiOkResponse({
+    type: SponsorInvitationDto,
+    description: 'Detalles de la invitación',
+  })
+  @ApiNotFoundResponse({ description: 'Invitación no encontrada' })
+  async getInvitationDetails(
+    @Param('invitationId', ParseObjectIdPipe) invitationId: string,
+  ) {
+    return await this.invitationsService.getInvitationDetails(invitationId);
+  }
+
+  @Patch(':invitationId')
+  @Roles(UserRole.PLATFORM_ADMIN)
+  @ApiOperation({ summary: 'Actualizar invitación (solo PLATFORM_ADMIN)' })
+  @ApiParam({ name: 'invitationId', description: 'ID de la invitación' })
+  @ApiOkResponse({
+    type: SponsorInvitationDto,
+    description: 'Invitación actualizada',
+  })
+  @ApiNotFoundResponse({ description: 'Invitación no encontrada' })
+  async updateInvitation(
+    @Param('invitationId', ParseObjectIdPipe) invitationId: string,
+    @Body() updateDto: UpdateSponsorInvitationDto,
+  ) {
+    return await this.invitationsService.updateInvitation(
+      invitationId,
+      updateDto,
+    );
+  }
+
+  @Delete(':invitationId')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.PLATFORM_ADMIN)
+  @ApiOperation({ summary: 'Desactivar invitación (solo PLATFORM_ADMIN)' })
+  @ApiParam({ name: 'invitationId', description: 'ID de la invitación' })
+  @ApiOkResponse({
+    type: SponsorInvitationDto,
+    description: 'Invitación desactivada',
+  })
+  @ApiNotFoundResponse({ description: 'Invitación no encontrada' })
+  async deactivateInvitation(
+    @Param('invitationId', ParseObjectIdPipe) invitationId: string,
+  ) {
+    return await this.invitationsService.deactivateInvitation(invitationId);
+  }
+}

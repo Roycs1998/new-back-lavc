@@ -20,13 +20,11 @@ import {
 } from 'mongoose';
 import { Event, EventDocument } from './entities/event.entity';
 import { CompaniesService } from 'src/companies/companies.service';
-import { SpeakersService } from 'src/speakers/speakers.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { EventStatus } from 'src/common/enums/event-status.enum';
 import { TicketStatus } from 'src/common/enums/ticket-status.enum';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import { EventFilterDto } from './dto/event-filter.dto';
-import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { CreateTicketTypeDto } from './dto/create-ticket-type.dto';
 import { toObjectId } from 'src/utils/toObjectId';
 import { EventDto } from './dto/event.dto';
@@ -35,14 +33,22 @@ import { sanitizeDefined } from 'src/utils/sanitizeDefined';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { EventPaginatedDto } from './dto/event-pagination.dto';
 import { EventStatsDto } from './dto/event-stats.dto';
-import {
-  CompanyEventStatsDto,
-  EventsByStatusDto,
-} from './dto/company-event-stats.dto';
+import { CompanyEventStatsDto } from './dto/company-event-stats.dto';
 import { TicketTypeDto } from './dto/ticket-type.dto';
 import { UpdateTicketTypeDto } from './dto/update-ticket-type.dto';
 
 type SortDir = 1 | -1;
+
+/**
+ * Interfaz para el usuario que realiza la petición
+ * Compatible con CurrentUserData del decorador @CurrentUser
+ */
+interface RequestingUser {
+  id: string;
+  email?: string;
+  role: string; // Viene como string del JWT, se compara con UserRole enum
+  companyId?: string;
+}
 
 function needsLookup(sortObj: Record<string, SortDir>): boolean {
   return Object.keys(sortObj).some((k) => k.includes('.'));
@@ -51,15 +57,15 @@ function needsLookup(sortObj: Record<string, SortDir>): boolean {
 @Injectable()
 export class EventsService {
   constructor(
-    @InjectModel(Event.name) private eventModel: Model<EventDocument>,
+    @InjectModel(Event.name) private readonly eventModel: Model<EventDocument>,
     @InjectModel(TicketType.name)
-    private ticketTypeModel: Model<TicketTypeDocument>,
+    private readonly ticketTypeModel: Model<TicketTypeDocument>,
     @Inject(forwardRef(() => CompaniesService))
-    private companiesService: CompaniesService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   private async generateUniqueSlug(title: string): Promise<string> {
-    let baseSlug = title
+    const baseSlug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');
@@ -82,9 +88,10 @@ export class EventsService {
 
   private parseSort(
     sortRaw: string | undefined,
-    fallbackOrder: any,
+    fallbackOrder: 'asc' | 'desc' | 'ASC' | 'DESC',
   ): Record<string, SortDir> {
-    const def: SortDir = fallbackOrder === 'asc' ? 1 : -1;
+    const normalizedOrder = fallbackOrder.toLowerCase() as 'asc' | 'desc';
+    const def: SortDir = normalizedOrder === 'asc' ? 1 : -1;
     if (!sortRaw || !sortRaw.trim()) return { createdAt: -1 };
 
     const out: Record<string, SortDir> = {};
@@ -174,12 +181,127 @@ export class EventsService {
       );
     }
 
-    return toDto(doc!, EventDto);
+    return toDto(doc, EventDto);
   }
 
+  /**
+   * Construye los filtros de estado de evento y soft delete basados en el rol del usuario
+   * @private
+   */
+  private buildEventStatusFilters(
+    requestingUser: RequestingUser | undefined,
+    eventStatus?: EventStatus,
+  ): FilterQuery<Event> {
+    const filters: FilterQuery<Event> = {};
+
+    // Si se especifica un eventStatus explícito en los filtros
+    if (eventStatus) {
+      filters.eventStatus = eventStatus;
+
+      // Solo incluir eventos no eliminados (soft delete) excepto si se buscan DELETED
+      if (eventStatus !== EventStatus.DELETED) {
+        filters.$and = [
+          {
+            $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+          },
+        ];
+      }
+      return filters;
+    }
+
+    // Lógica basada en el rol del usuario cuando NO se especifica eventStatus
+    const userRole = requestingUser?.role;
+
+    if (userRole === UserRole.USER || !requestingUser) {
+      // Usuarios normales o anónimos: solo ven eventos PUBLISHED o COMPLETED
+      filters.eventStatus = {
+        $in: [EventStatus.PUBLISHED, EventStatus.COMPLETED],
+      };
+      filters.$and = [
+        {
+          $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+        },
+      ];
+    } else if (userRole === UserRole.COMPANY_ADMIN) {
+      // Company admins: ven todos los estados excepto DELETED
+      filters.eventStatus = { $ne: EventStatus.DELETED };
+      filters.$and = [
+        {
+          $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+        },
+      ];
+    } else if (userRole === UserRole.PLATFORM_ADMIN) {
+      // Platform admins: ven todos los estados excepto DELETED
+      filters.eventStatus = { $ne: EventStatus.DELETED };
+      filters.$and = [
+        {
+          $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+        },
+      ];
+    } else {
+      // Cualquier otro rol: excluir DELETED
+      filters.eventStatus = { $ne: EventStatus.DELETED };
+      filters.$and = [
+        {
+          $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+        },
+      ];
+    }
+
+    return filters;
+  }
+
+  /**
+   * Construye el filtro de companyId basado en el usuario y parámetros
+   * @private
+   */
+  private buildCompanyFilter(
+    requestingUser: RequestingUser | undefined,
+    companyId?: string,
+  ): { companyId?: Types.ObjectId } {
+    // Si el usuario es COMPANY_ADMIN, siempre filtrar por su companyId
+    if (
+      requestingUser?.role === UserRole.COMPANY_ADMIN &&
+      requestingUser?.companyId
+    ) {
+      return { companyId: toObjectId(requestingUser.companyId) };
+    }
+
+    // Si se proporciona companyId en los parámetros, usarlo
+    if (companyId) {
+      return { companyId: toObjectId(companyId) };
+    }
+
+    return {};
+  }
+
+  /**
+   * Construye los filtros de búsqueda de texto
+   * @private
+   */
+  private buildSearchFilter(search?: string): { $or?: any[] } {
+    if (!search?.trim()) {
+      return {};
+    }
+
+    const regex = { $regex: escapeRegex(search.trim()), $options: 'i' };
+    return {
+      $or: [
+        { title: regex },
+        { description: regex },
+        { shortDescription: regex },
+        { tags: regex },
+        { categories: regex },
+      ],
+    };
+  }
+
+  /**
+   * Obtiene todos los eventos con filtros y paginación
+   */
   async findAll(
     filterDto: EventFilterDto,
-    requestingUser?: any,
+    requestingUser?: RequestingUser,
   ): Promise<EventPaginatedDto> {
     const {
       page = 1,
@@ -205,56 +327,51 @@ export class EventsService {
     const skip = (page - 1) * limit;
     const match: FilterQuery<Event> = {};
 
-    if (
-      requestingUser?.role === UserRole.COMPANY_ADMIN &&
-      requestingUser?.companyId
-    ) {
-      match.companyId = toObjectId(requestingUser.companyId);
-    } else if (companyId) {
-      match.companyId = toObjectId(companyId);
+    // 1. Filtro de compañía
+    Object.assign(match, this.buildCompanyFilter(requestingUser, companyId));
+
+    // 2. Filtros de estado y soft delete
+    const statusFilters = this.buildEventStatusFilters(
+      requestingUser,
+      eventStatus,
+    );
+    Object.assign(match, statusFilters);
+
+    // 3. Filtro de tipo de evento
+    if (type) {
+      match.type = type;
     }
 
-    if (eventStatus) {
-      match.eventStatus = eventStatus;
-      if (eventStatus === EventStatus.DELETED) {
-      } else {
-        match.$or = [{ deletedAt: { $exists: false } }, { deletedAt: null }];
-      }
-    } else if (requestingUser?.role === UserRole.USER || !requestingUser) {
-      match.eventStatus = {
-        $in: [EventStatus.PUBLISHED, EventStatus.COMPLETED],
-      };
-      match.$or = [{ deletedAt: { $exists: false } }, { deletedAt: null }];
-    } else {
-      match.eventStatus = { $ne: EventStatus.DELETED };
+    // 4. Filtros de ubicación
+    if (locationType) {
+      match['location.type'] = locationType;
     }
-
-    if (type) match.type = type;
-
-    if (locationType) match['location.type'] = locationType;
-
-    if (city)
+    if (city) {
       match['location.address.city'] = {
         $regex: escapeRegex(city),
         $options: 'i',
       };
-    if (country)
+    }
+    if (country) {
       match['location.address.country'] = {
         $regex: escapeRegex(country),
         $options: 'i',
       };
+    }
 
+    // 5. Filtros de fechas
     if (startFrom || startTo) {
       match.startDate = {};
-      if (startFrom) (match.startDate as any).$gte = new Date(startFrom);
-      if (startTo) (match.startDate as any).$lte = new Date(startTo);
+      if (startFrom) match.startDate.$gte = new Date(startFrom);
+      if (startTo) match.startDate.$lte = new Date(startTo);
     }
     if (endFrom || endTo) {
       match.endDate = {};
-      if (endFrom) (match.endDate as any).$gte = new Date(endFrom);
-      if (endTo) (match.endDate as any).$lte = new Date(endTo);
+      if (endFrom) match.endDate.$gte = new Date(endFrom);
+      if (endTo) match.endDate.$lte = new Date(endTo);
     }
 
+    // 6. Filtros de tags y categorías
     if (Array.isArray(tags) && tags.length) {
       match.tags = { $in: tags };
     }
@@ -262,65 +379,100 @@ export class EventsService {
       match.categories = { $in: categories };
     }
 
-    if (speakerId) match.speakers = toObjectId(speakerId);
-
-    if (search?.trim()) {
-      const r = { $regex: escapeRegex(search.trim()), $options: 'i' };
-      match.$or = [
-        { title: r },
-        { description: r },
-        { shortDescription: r },
-        { tags: r },
-        { categories: r },
-      ];
+    // 7. Filtro de speaker
+    if (speakerId) {
+      match.speakers = toObjectId(speakerId);
     }
 
+    // 8. Filtro de búsqueda de texto
+    // Si hay búsqueda de texto, necesitamos combinar con $and para no sobrescribir el $or de deletedAt
+    const searchFilter = this.buildSearchFilter(search);
+    if (searchFilter.$or) {
+      // Si ya existe un $and, agregar el filtro de búsqueda
+      if (match.$and) {
+        match.$and.push(searchFilter);
+      } else {
+        // Si no existe $and, crearlo con el filtro de búsqueda
+        match.$and = [searchFilter];
+      }
+    }
+
+    // 9. Ordenamiento
     const sortObj = this.parseSort(sort, order);
 
+    // 10. Ejecución de la query con o sin lookup
     if (needsLookup(sortObj)) {
-      const pipeline: PipelineStage[] = [
-        { $match: match },
-        {
-          $lookup: {
-            from: 'companies',
-            localField: 'companyId',
-            foreignField: '_id',
-            as: 'company',
-            pipeline: [
-              { $project: { name: 1, contactEmail: 1, contactPhone: 1 } },
-            ],
-          },
-        },
-        { $unwind: { path: '$company', preserveNullAndEmptyArrays: true } },
-        { $sort: sortObj as any },
-        { $skip: skip },
-        { $limit: limit },
-      ];
-
-      const [items, countAgg] = await Promise.all([
-        this.eventModel
-          .aggregate(pipeline)
-          .collation({ locale: 'es', strength: 2 })
-          .exec(),
-        this.eventModel
-          .aggregate([{ $match: match }, { $count: 'total' }])
-          .exec(),
-      ]);
-
-      const data = items.map((i) => toDto(i, EventDto));
-      const totalItems = countAgg[0]?.total ?? 0;
-      const totalPages = Math.max(1, Math.ceil(totalItems / limit));
-
-      return {
-        data,
-        totalItems,
-        totalPages,
-        currentPage: page,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
-      };
+      return this.executeAggregationQuery(match, sortObj, skip, limit, page);
     }
 
+    return this.executeStandardQuery(match, sortObj, skip, limit, page);
+  }
+
+  /**
+   * Ejecuta la query usando aggregation pipeline (cuando se necesita lookup)
+   * @private
+   */
+  private async executeAggregationQuery(
+    match: FilterQuery<Event>,
+    sortObj: Record<string, SortDir>,
+    skip: number,
+    limit: number,
+    page: number,
+  ): Promise<EventPaginatedDto> {
+    const pipeline: PipelineStage[] = [
+      { $match: match },
+      {
+        $lookup: {
+          from: 'companies',
+          localField: 'companyId',
+          foreignField: '_id',
+          as: 'company',
+          pipeline: [
+            { $project: { name: 1, contactEmail: 1, contactPhone: 1 } },
+          ],
+        },
+      },
+      { $unwind: { path: '$company', preserveNullAndEmptyArrays: true } },
+      { $sort: sortObj as any },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const [items, countAgg] = await Promise.all([
+      this.eventModel
+        .aggregate(pipeline)
+        .collation({ locale: 'es', strength: 2 })
+        .exec(),
+      this.eventModel
+        .aggregate([{ $match: match }, { $count: 'total' }])
+        .exec(),
+    ]);
+
+    const data = items.map((i) => toDto(i, EventDto));
+    const totalItems = countAgg[0]?.total ?? 0;
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+
+    return {
+      data,
+      totalItems,
+      totalPages,
+      currentPage: page,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
+  }
+
+  /**
+   * Ejecuta la query estándar con populate
+   * @private
+   */
+  private async executeStandardQuery(
+    match: FilterQuery<Event>,
+    sortObj: Record<string, SortDir>,
+    skip: number,
+    limit: number,
+    page: number,
+  ): Promise<EventPaginatedDto> {
     const projection: ProjectionType<Event> = {};
     const query = this.eventModel
       .find(match, projection, {
@@ -355,7 +507,10 @@ export class EventsService {
     };
   }
 
-  async findOne(id: string, requestingUser?: any): Promise<EventDto> {
+  async findOne(
+    id: string,
+    requestingUser?: RequestingUser,
+  ): Promise<EventDto> {
     const filter: any = { _id: id };
 
     const event = await this.eventModel
@@ -430,19 +585,24 @@ export class EventsService {
     updatedBy: string,
   ): Promise<EventDto> {
     const existing = await this.eventModel.findById(id).exec();
-    if (!existing) throw new NotFoundException(`Event with ID ${id} not found`);
+    if (!existing) {
+      throw new NotFoundException(`Evento con ID ${id} no encontrado`);
+    }
 
+    // Validar slug único si se está actualizando
     if (updateEventDto.slug && updateEventDto.slug !== existing.slug) {
-      const exists = await this.eventModel.exists({
+      const slugExists = await this.eventModel.exists({
         slug: updateEventDto.slug,
         companyId: existing.companyId,
         _id: { $ne: existing._id },
         eventStatus: { $ne: EventStatus.DELETED },
       });
-      if (exists)
+      if (slugExists) {
         throw new BadRequestException('Slug ya existe para esta empresa');
+      }
     }
 
+    // Validar fechas
     const startDate = updateEventDto.startDate
       ? new Date(updateEventDto.startDate)
       : existing.startDate;
@@ -455,14 +615,29 @@ export class EventsService {
       );
     }
 
-    const $set = sanitizeDefined({
+    // Preparar datos para actualización
+    // IMPORTANTE: No incluir companyId ni eventStatus (se manejan por separado)
+    const updateData: Record<string, unknown> = {
       ...updateEventDto,
-      speakers: Array.isArray(updateEventDto.speakers)
-        ? updateEventDto.speakers.map(toObjectId)
-        : undefined,
       updatedBy: toObjectId(updatedBy),
       updatedAt: new Date(),
-    });
+    };
+
+    // Convertir speakers a ObjectId si están presentes
+    if (Array.isArray(updateEventDto.speakers)) {
+      updateData.speakers = updateEventDto.speakers.map(toObjectId);
+    }
+
+    // Convertir fechas si están presentes
+    if (updateEventDto.startDate) {
+      updateData.startDate = startDate;
+    }
+    if (updateEventDto.endDate) {
+      updateData.endDate = endDate;
+    }
+
+    // Sanitizar undefined values
+    const $set = sanitizeDefined(updateData);
 
     const updated = await this.eventModel
       .findByIdAndUpdate(
@@ -479,8 +654,9 @@ export class EventsService {
       })
       .exec();
 
-    if (!updated)
+    if (!updated) {
       throw new NotFoundException(`Evento con ID ${id} no encontrado`);
+    }
 
     return toDto(updated, EventDto);
   }

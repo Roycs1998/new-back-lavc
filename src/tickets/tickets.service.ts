@@ -2,17 +2,30 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { OrdersService } from '../orders/orders.service';
 import { Ticket, TicketDocument } from './entities/ticket.entity';
+import {
+  TicketType,
+  TicketTypeDocument,
+} from '../events/entities/ticket.entity';
+import { UsersService } from '../users/users.service';
+import { ParticipantType } from '../common/enums/participant-type.enum';
+import { TicketLifecycleStatus } from '../common/enums/ticket-lifecycle-status.enum';
 
 @Injectable()
 export class TicketsService {
   constructor(
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
+    @InjectModel(TicketType.name)
+    private ticketTypeModel: Model<TicketTypeDocument>,
     private ordersService: OrdersService,
+    @Inject(forwardRef(() => UsersService))
+    private usersService: UsersService,
   ) {}
 
   async generateTicketsForOrder(orderId: string): Promise<Ticket[]> {
@@ -108,6 +121,72 @@ export class TicketsService {
       { orderId: new Types.ObjectId(orderId) },
       {
         status: 'cancelled',
+        updatedAt: new Date(),
+      },
+    );
+  }
+
+  async generateTicketForInvitation(data: {
+    userId: string;
+    eventId: string;
+    ticketTypeId: string;
+    participantId: string;
+    participantType: ParticipantType;
+  }): Promise<Ticket> {
+    // Obtener información del usuario
+    const user = await this.usersService.findOne(data.userId);
+
+    if (!user.person) {
+      throw new BadRequestException('User does not have person information');
+    }
+
+    // Obtener información del ticket type
+    const ticketType = await this.ticketTypeModel
+      .findById(new Types.ObjectId(data.ticketTypeId))
+      .exec();
+
+    if (!ticketType) {
+      throw new NotFoundException('Ticket type not found');
+    }
+
+    // Generar número de ticket único
+    const ticketNumber = await this.generateTicketNumber();
+
+    // Crear ticket
+    const ticket = new this.ticketModel({
+      ticketNumber,
+      orderId: null, // No tiene orden porque no pagó
+      userId: new Types.ObjectId(data.userId),
+      eventId: new Types.ObjectId(data.eventId),
+      ticketTypeId: new Types.ObjectId(data.ticketTypeId),
+      ticketTypeName: ticketType.name,
+      price: 0, // Gratis (invitación o beca)
+      currency: ticketType.currency,
+      status: TicketLifecycleStatus.ACTIVE,
+      sourceType: 'invitation',
+      sourceId: new Types.ObjectId(data.participantId),
+      participantType: data.participantType,
+      attendeeInfo: {
+        firstName: user.person.firstName,
+        lastName: user.person.lastName,
+        email: user.email,
+        phone: user.person.phone || '',
+        documentType: (user.person as any).documentType || 'DNI',
+        documentNumber: (user.person as any).documentNumber || '00000000',
+      },
+    });
+
+    return await ticket.save();
+  }
+
+  async cancelTicketForParticipant(participantId: string): Promise<void> {
+    await this.ticketModel.updateMany(
+      {
+        sourceType: 'invitation',
+        sourceId: new Types.ObjectId(participantId),
+      },
+      {
+        status: TicketLifecycleStatus.CANCELLED,
         updatedAt: new Date(),
       },
     );

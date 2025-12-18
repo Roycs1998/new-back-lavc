@@ -120,7 +120,10 @@ export class StorageController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Event image uploaded successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Event image uploaded successfully',
+  })
   async uploadEventImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file provided');
@@ -151,7 +154,10 @@ export class StorageController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Speaker photo uploaded successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Speaker photo uploaded successfully',
+  })
   async uploadSpeakerPhoto(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file provided');
@@ -182,7 +188,10 @@ export class StorageController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Company logo uploaded successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Company logo uploaded successfully',
+  })
   async uploadCompanyLogo(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file provided');
@@ -233,10 +242,7 @@ export class StorageController {
     @Param('key') key: string,
     @Query('expiresIn') expiresIn?: number,
   ) {
-    const url = await this.storageService.getSignedUrl(
-      key,
-      expiresIn || 3600,
-    );
+    const url = await this.storageService.getSignedUrl(key, expiresIn || 3600);
     return { url };
   }
 }

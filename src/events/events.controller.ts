@@ -6,8 +6,6 @@ import {
   Patch,
   Param,
   Delete,
-  HttpCode,
-  HttpStatus,
   UseGuards,
   Query,
 } from '@nestjs/common';
@@ -19,7 +17,6 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CompanyScopeGuard } from 'src/common/guards/company-scope.guard';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { CompanyScope } from 'src/common/decorators/company-scope.decorator';
 import {
   ApiBearerAuth,
   ApiBody,

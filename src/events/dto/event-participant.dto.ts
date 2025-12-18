@@ -1,0 +1,249 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Expose, Type } from 'class-transformer';
+import { ParticipantType } from '../../common/enums/participant-type.enum';
+
+class ShortPersonDto {
+  @ApiProperty({
+    description: 'ID único de la persona',
+    example: '64f14b1a2c4e5a1234567890',
+  })
+  @Expose()
+  id: string;
+
+  @ApiProperty({
+    description: 'Nombre de la persona',
+    example: 'Juan',
+  })
+  @Expose()
+  firstName: string;
+
+  @ApiProperty({
+    description: 'Apellido de la persona',
+    example: 'Pérez',
+  })
+  @Expose()
+  lastName: string;
+
+  @ApiPropertyOptional({
+    description: 'Número de teléfono',
+    example: '+51987654321',
+  })
+  @Expose()
+  phone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Nombre completo de la persona (campo virtual)',
+    example: 'Juan Pérez',
+  })
+  @Expose()
+  fullName?: string;
+}
+
+class ShortUserDto {
+  @ApiProperty({
+    description: 'ID del usuario',
+    example: '66c0da2b6a3aa6ed3c63e002',
+  })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({
+    description: 'Email del usuario',
+    example: 'usuario@example.com',
+  })
+  @Expose()
+  email!: string;
+
+  @ApiProperty({
+    description: 'Información del usuario',
+    type: ShortPersonDto,
+  })
+  @Type(() => ShortPersonDto)
+  @Expose()
+  person: ShortPersonDto;
+}
+
+class ShortCompanyDto {
+  @ApiProperty({
+    description: 'ID de la empresa',
+    example: '66bfca24c3baf17b08c9b111',
+  })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({
+    description: 'Nombre de la empresa',
+    example: 'TechCorp Solutions',
+  })
+  @Expose()
+  name!: string;
+
+  @ApiPropertyOptional({
+    description: 'RUC de la empresa',
+    example: '20123456789',
+  })
+  @Expose()
+  ruc?: string;
+
+  @ApiPropertyOptional({
+    description: 'Email de la empresa',
+    example: 'contacto@techcorp.com',
+  })
+  @Expose()
+  email?: string;
+
+  @ApiPropertyOptional({
+    description: 'Teléfono de la empresa',
+    example: '+51 1 234 5678',
+  })
+  @Expose()
+  phone?: string;
+}
+
+class ShortSponsorDto {
+  @ApiProperty({
+    description: 'ID del patrocinador',
+    example: '66c0da2b6a3aa6ed3c63e004',
+  })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({
+    description: 'ID de la empresa',
+    example: '66bfca24c3baf17b08c9b111',
+  })
+  @Expose()
+  companyId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Cuota de staff',
+    example: 5,
+  })
+  @Expose()
+  staffQuota?: number;
+
+  @ApiPropertyOptional({
+    description: 'Cuota de invitados',
+    example: 10,
+  })
+  @Expose()
+  guestQuota?: number;
+
+  @ApiPropertyOptional({
+    description: 'Cuota de becados',
+    example: 3,
+  })
+  @Expose()
+  scholarshipQuota?: number;
+
+  @ApiPropertyOptional({
+    description: 'Nivel de patrocinio',
+    example: 'gold',
+  })
+  @Expose()
+  sponsorshipLevel?: string;
+
+  @ApiPropertyOptional({
+    description: 'Información completa de la empresa',
+    type: ShortCompanyDto,
+  })
+  @Type(() => ShortCompanyDto)
+  @Expose()
+  company?: ShortCompanyDto;
+}
+
+export class EventParticipantDto {
+  @ApiProperty({
+    description: 'ID del participante',
+    example: '66c0da2b6a3aa6ed3c63e005',
+  })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({
+    description: 'ID del evento',
+    example: '66c0da2b6a3aa6ed3c63e001',
+  })
+  @Expose()
+  eventId!: string;
+
+  @ApiProperty({
+    description: 'ID del usuario participante',
+    example: '66c0da2b6a3aa6ed3c63e002',
+  })
+  @Expose()
+  userId!: string;
+
+  @ApiPropertyOptional({
+    description: 'ID del patrocinador (si aplica)',
+    example: '66c0da2b6a3aa6ed3c63e004',
+  })
+  @Expose()
+  eventSponsorId?: string;
+
+  @ApiProperty({
+    description: 'Tipo de participante',
+    enum: ParticipantType,
+    example: ParticipantType.STAFF,
+  })
+  @Expose()
+  participantType!: ParticipantType;
+
+  @ApiProperty({
+    description: 'Fecha de registro',
+    example: '2025-09-15T10:00:00.000Z',
+  })
+  @Expose()
+  registeredAt!: Date;
+
+  @ApiPropertyOptional({
+    description: 'ID del ticket generado',
+    example: '66c0da2b6a3aa6ed3c63e006',
+  })
+  @Expose()
+  ticketId?: string;
+
+  @ApiProperty({
+    description: 'Estado activo del participante',
+    example: true,
+  })
+  @Expose()
+  isActive!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Fecha de cancelación',
+    example: '2025-09-20T15:30:00.000Z',
+  })
+  @Expose()
+  cancelledAt?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Información del usuario',
+    type: ShortUserDto,
+  })
+  @Type(() => ShortUserDto)
+  @Expose()
+  user?: ShortUserDto;
+
+  @ApiPropertyOptional({
+    description: 'Información del patrocinador con empresa',
+    type: ShortSponsorDto,
+  })
+  @Type(() => ShortSponsorDto)
+  @Expose()
+  sponsor?: ShortSponsorDto;
+
+  @ApiProperty({
+    description: 'Fecha de creación',
+    example: '2025-09-15T10:00:00.000Z',
+  })
+  @Expose()
+  createdAt!: Date;
+
+  @ApiProperty({
+    description: 'Fecha de última actualización',
+    example: '2025-09-15T10:00:00.000Z',
+  })
+  @Expose()
+  updatedAt!: Date;
+}

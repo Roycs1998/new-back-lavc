@@ -26,7 +26,8 @@ export class BankAccountInfo {
   interbankCode?: string; // CCI
 }
 
-export const BankAccountInfoSchema = SchemaFactory.createForClass(BankAccountInfo);
+export const BankAccountInfoSchema =
+  SchemaFactory.createForClass(BankAccountInfo);
 
 @Schema({ _id: false })
 export class CulqiConfig {
@@ -62,14 +63,19 @@ export class PaymentMethodSettings {
   @Prop({ default: true })
   allowVoucher: boolean; // Permite subir voucher/comprobante
 
-  @Prop({ type: [String], default: ['image/png', 'image/jpeg', 'application/pdf'] })
+  @Prop({
+    type: [String],
+    default: ['image/png', 'image/jpeg', 'application/pdf'],
+  })
   allowedVoucherTypes: string[];
 
   @Prop({ type: Number, default: 5 * 1024 * 1024 }) // 5MB
   maxVoucherSize: number;
 }
 
-export const PaymentMethodSettingsSchema = SchemaFactory.createForClass(PaymentMethodSettings);
+export const PaymentMethodSettingsSchema = SchemaFactory.createForClass(
+  PaymentMethodSettings,
+);
 
 @Schema({
   collection: 'payment_methods',

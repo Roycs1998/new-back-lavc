@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PersonsModule } from './persons/persons.module';
 import { CompaniesModule } from './companies/companies.module';
 import { UsersModule } from './users/users.module';
@@ -29,6 +30,7 @@ import { StorageModule } from './storage/storage.module';
       load: [databaseConfig, jwtConfig, appConfig],
       envFilePath: ['.env.local', '.env'],
     }),
+    ScheduleModule.forRoot(),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -54,9 +56,9 @@ import { StorageModule } from './storage/storage.module';
     AnalyticsModule,
     PaymentMethodsModule,
     EmailModule,
-    StorageModule,
+    //StorageModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule { }
+export class AppModule {}

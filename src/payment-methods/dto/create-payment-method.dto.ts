@@ -60,7 +60,10 @@ export class CulqiConfigDto {
   @IsString({ each: true })
   enabledMethods?: string[];
 
-  @ApiPropertyOptional({ example: 0.035, description: 'Comisión adicional (3.5%)' })
+  @ApiPropertyOptional({
+    example: 0.035,
+    description: 'Comisión adicional (3.5%)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -110,7 +113,10 @@ export class CreatePaymentMethodDto {
   @IsString()
   description: string;
 
-  @ApiProperty({ enum: PaymentMethodType, example: PaymentMethodType.BANK_TRANSFER })
+  @ApiProperty({
+    enum: PaymentMethodType,
+    example: PaymentMethodType.BANK_TRANSFER,
+  })
   @IsEnum(PaymentMethodType)
   type: PaymentMethodType;
 

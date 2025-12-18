@@ -1,5 +1,11 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsEnum, IsMongoId, IsBoolean, IsString } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsMongoId,
+  IsBoolean,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentMethodType } from '../enums/payment-method-type.enum';
 

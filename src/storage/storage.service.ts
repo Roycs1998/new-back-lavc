@@ -10,7 +10,10 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { StoragePath } from './enums/storage-path.enum';
-import { UploadOptions, FileInfo } from './interfaces/storage-options.interface';
+import {
+  UploadOptions,
+  FileInfo,
+} from './interfaces/storage-options.interface';
 
 @Injectable()
 export class StorageService {
@@ -38,7 +41,8 @@ export class StorageService {
       },
     });
 
-    this.bucket = this.configService.get('DO_SPACES_BUCKET') || 'default-bucket';
+    this.bucket =
+      this.configService.get('DO_SPACES_BUCKET') || 'default-bucket';
     this.cdnUrl = this.configService.get('DO_SPACES_CDN_URL') || endpoint;
 
     this.logger.log('Storage service initialized with DigitalOcean Spaces');
@@ -91,9 +95,8 @@ export class StorageService {
 
       await this.s3.send(command);
 
-      const publicUrl = options.isPublic !== false 
-        ? `${this.cdnUrl}/${key}`
-        : undefined;
+      const publicUrl =
+        options.isPublic !== false ? `${this.cdnUrl}/${key}` : undefined;
 
       this.logger.log(`File uploaded successfully: ${key}`);
 
@@ -193,11 +196,20 @@ export class StorageService {
       path: StoragePath.VOUCHERS,
       isPublic: false,
       maxSize: 5 * 1024 * 1024, // 5MB
-      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'],
+      allowedMimeTypes: [
+        'image/png',
+        'image/jpeg',
+        'image/jpg',
+        'application/pdf',
+      ],
     });
   }
 
-  async uploadEventImage(buffer: Buffer, originalName: string, mimeType: string) {
+  async uploadEventImage(
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ) {
     return this.uploadFile(buffer, originalName, mimeType, {
       path: StoragePath.EVENTS,
       isPublic: true,
@@ -206,7 +218,11 @@ export class StorageService {
     });
   }
 
-  async uploadSpeakerPhoto(buffer: Buffer, originalName: string, mimeType: string) {
+  async uploadSpeakerPhoto(
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ) {
     return this.uploadFile(buffer, originalName, mimeType, {
       path: StoragePath.SPEAKERS,
       isPublic: true,
@@ -215,7 +231,11 @@ export class StorageService {
     });
   }
 
-  async uploadCompanyLogo(buffer: Buffer, originalName: string, mimeType: string) {
+  async uploadCompanyLogo(
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ) {
     return this.uploadFile(buffer, originalName, mimeType, {
       path: StoragePath.COMPANIES,
       isPublic: true,
