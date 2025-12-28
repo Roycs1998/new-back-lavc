@@ -152,6 +152,52 @@ class ShortSponsorDto {
   company?: ShortCompanyDto;
 }
 
+class ShortSpeakerDto {
+  @ApiProperty({
+    description: 'ID del speaker',
+    example: '66a9d8f7a2a0b7b3e1b01234',
+  })
+  @Expose()
+  id!: string;
+
+  @ApiPropertyOptional({
+    description: 'Biografía del speaker',
+    example: 'Veterinario especializado en cirugía...',
+  })
+  @Expose()
+  bio?: string;
+
+  @ApiPropertyOptional({
+    description: 'Especialidad del speaker',
+    example: 'Cirugía Veterinaria',
+  })
+  @Expose()
+  specialty?: string;
+
+  @ApiPropertyOptional({
+    description: 'Años de experiencia',
+    example: 15,
+  })
+  @Expose()
+  yearsExperience?: number;
+
+  @ApiPropertyOptional({
+    description: 'Información de la persona asociada al speaker',
+    type: ShortPersonDto,
+  })
+  @Type(() => ShortPersonDto)
+  @Expose()
+  person?: ShortPersonDto;
+
+  @ApiPropertyOptional({
+    description: 'Empresa asociada al speaker',
+    type: ShortCompanyDto,
+  })
+  @Type(() => ShortCompanyDto)
+  @Expose()
+  company?: ShortCompanyDto;
+}
+
 export class EventParticipantDto {
   @ApiProperty({
     description: 'ID del participante',
@@ -232,6 +278,14 @@ export class EventParticipantDto {
   @Type(() => ShortSponsorDto)
   @Expose()
   sponsor?: ShortSponsorDto;
+
+  @ApiPropertyOptional({
+    description: 'Información del speaker (solo para tipo SPEAKER)',
+    type: ShortSpeakerDto,
+  })
+  @Type(() => ShortSpeakerDto)
+  @Expose()
+  speaker?: ShortSpeakerDto;
 
   @ApiProperty({
     description: 'Fecha de creación',

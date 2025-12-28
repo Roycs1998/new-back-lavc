@@ -268,6 +268,7 @@ export class EventDto {
   location!: EventLocationViewDto;
 
   @ApiProperty({ type: [ShortSpeakerDto] })
+  @Type(() => ShortSpeakerDto)
   @Expose()
   speakers!: ShortSpeakerDto[];
 

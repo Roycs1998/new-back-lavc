@@ -62,7 +62,7 @@ export class EventsService {
     private readonly ticketTypeModel: Model<TicketTypeDocument>,
     @Inject(forwardRef(() => CompaniesService))
     private readonly companiesService: CompaniesService,
-  ) {}
+  ) { }
 
   private async generateUniqueSlug(title: string): Promise<string> {
     const baseSlug = title
@@ -170,7 +170,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'personId',
+          path: 'person',
         },
       })
       .exec();
@@ -184,10 +184,6 @@ export class EventsService {
     return toDto(doc, EventDto);
   }
 
-  /**
-   * Construye los filtros de estado de evento y soft delete basados en el rol del usuario
-   * @private
-   */
   private buildEventStatusFilters(
     requestingUser: RequestingUser | undefined,
     eventStatus?: EventStatus,
@@ -251,10 +247,6 @@ export class EventsService {
     return filters;
   }
 
-  /**
-   * Construye el filtro de companyId basado en el usuario y parámetros
-   * @private
-   */
   private buildCompanyFilter(
     requestingUser: RequestingUser | undefined,
     companyId?: string,
@@ -275,10 +267,6 @@ export class EventsService {
     return {};
   }
 
-  /**
-   * Construye los filtros de búsqueda de texto
-   * @private
-   */
   private buildSearchFilter(search?: string): { $or?: any[] } {
     if (!search?.trim()) {
       return {};
@@ -296,9 +284,7 @@ export class EventsService {
     };
   }
 
-  /**
-   * Obtiene todos los eventos con filtros y paginación
-   */
+
   async findAll(
     filterDto: EventFilterDto,
     requestingUser?: RequestingUser,
@@ -482,7 +468,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'personId',
+          path: 'person',
         },
       })
       .sort(sortObj)
@@ -519,7 +505,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'personId',
+          path: 'person',
           select: 'firstName lastName email',
         },
       })
@@ -567,7 +553,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'personId',
+          path: 'person',
         },
       })
       .exec();
@@ -649,7 +635,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'personId',
+          path: 'person',
         },
       })
       .exec();
@@ -707,7 +693,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'personId',
+          path: 'person',
         },
       })
       .exec();

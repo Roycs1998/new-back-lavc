@@ -43,7 +43,7 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 export class EventParticipantsController {
   constructor(
     private readonly eventParticipantsService: EventParticipantsService,
-  ) {}
+  ) { }
 
   @Post()
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
@@ -291,6 +291,47 @@ export class EventParticipantsController {
       hasAccess,
       isStaff: hasAccess, // Si tiene acceso, es staff
       isEventActive: hasAccess, // Si tiene acceso, el evento está activo
+    };
+  }
+
+  @Post('sync-speakers')
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sincronizar speakers del evento con participantes',
+    description:
+      'Sincroniza la lista de speakers del evento con EventParticipant. Agrega nuevos speakers como participantes tipo SPEAKER y desactiva los que fueron removidos.',
+  })
+  @ApiParam({
+    name: 'eventId',
+    description: 'ID del evento',
+    example: '66c0da2b6a3aa6ed3c63e001',
+  })
+  @ApiOkResponse({
+    description: 'Speakers sincronizados exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Speakers sincronizados exitosamente' },
+        syncedCount: { type: 'number', example: 3 },
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'Datos inválidos',
+  })
+  async syncSpeakers(
+    @Param('eventId', ParseObjectIdPipe) eventId: string,
+    @Body() syncSpeakersDto: { speakers: string[] },
+  ) {
+    await this.eventParticipantsService.syncSpeakersAsParticipants(
+      eventId,
+      syncSpeakersDto.speakers,
+    );
+
+    return {
+      message: 'Speakers sincronizados exitosamente',
+      syncedCount: syncSpeakersDto.speakers.length,
     };
   }
 }

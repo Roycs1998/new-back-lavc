@@ -1,7 +1,8 @@
 export enum ParticipantType {
+  REGULAR = 'regular',
   STAFF = 'staff',
   GUEST = 'guest',
   SCHOLARSHIP = 'scholarship',
-  REGULAR = 'regular',
   OPERATIONAL_STAFF = 'operational_staff',
+  SPEAKER = 'speaker',
 }

@@ -16,11 +16,14 @@ export class EventParticipant {
   @Prop({ type: Types.ObjectId, ref: 'Event', required: true })
   eventId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  userId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'EventSponsor' })
   eventSponsorId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Speaker' })
+  speakerId?: Types.ObjectId;
 
   @Prop({
     type: String,
@@ -69,6 +72,13 @@ EventParticipantSchema.virtual('sponsor', {
   justOne: true,
 });
 
+EventParticipantSchema.virtual('speaker', {
+  ref: 'Speaker',
+  localField: 'speakerId',
+  foreignField: '_id',
+  justOne: true,
+});
+
 EventParticipantSchema.virtual('ticket', {
   ref: 'Ticket',
   localField: 'ticketId',
@@ -76,8 +86,16 @@ EventParticipantSchema.virtual('ticket', {
   justOne: true,
 });
 
-EventParticipantSchema.index({ eventId: 1, userId: 1 }, { unique: true });
+EventParticipantSchema.index(
+  { eventId: 1, userId: 1 },
+  { unique: true, sparse: true },
+);
+EventParticipantSchema.index(
+  { eventId: 1, speakerId: 1 },
+  { unique: true, sparse: true },
+);
 EventParticipantSchema.index({ eventSponsorId: 1 });
+EventParticipantSchema.index({ speakerId: 1 });
 EventParticipantSchema.index({ participantType: 1 });
 EventParticipantSchema.index({ eventId: 1, participantType: 1 });
 EventParticipantSchema.index({ eventId: 1, isActive: 1 });

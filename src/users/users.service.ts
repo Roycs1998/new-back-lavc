@@ -24,6 +24,7 @@ import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 import { UserDto } from './dto/user.dto';
 import { UserPaginatedDto } from './dto/user-pagination.dto';
 import { toDto } from 'src/utils/toDto';
+import { UpdatePersonDto } from 'src/persons/dto/update-person.dto';
 
 @Injectable()
 export class UsersService {
@@ -31,7 +32,7 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @Inject(forwardRef(() => PersonsService))
     private personsService: PersonsService,
-  ) {}
+  ) { }
 
   async create(dto: CreateUserDto): Promise<UserDto> {
     if (dto.roles?.includes(UserRole.COMPANY_ADMIN) && !dto.companyId) {
@@ -145,22 +146,22 @@ export class UsersService {
 
     const searchMatch = search?.trim()
       ? {
-          $or: [
-            { email: { $regex: escapeRegex(search.trim()), $options: 'i' } },
-            {
-              'person.firstName': {
-                $regex: escapeRegex(search.trim()),
-                $options: 'i',
-              },
+        $or: [
+          { email: { $regex: escapeRegex(search.trim()), $options: 'i' } },
+          {
+            'person.firstName': {
+              $regex: escapeRegex(search.trim()),
+              $options: 'i',
             },
-            {
-              'person.lastName': {
-                $regex: escapeRegex(search.trim()),
-                $options: 'i',
-              },
+          },
+          {
+            'person.lastName': {
+              $regex: escapeRegex(search.trim()),
+              $options: 'i',
             },
-          ],
-        }
+          },
+        ],
+      }
       : null;
 
     const SORT_WHITELIST = new Set([
@@ -270,9 +271,26 @@ export class UsersService {
       if (dup) throw new ConflictException('El email ya está registrado');
     }
 
+    const { firstName, lastName, phone, dateOfBirth, ...userFields } = dto;
+
+    if (existing.personId && (firstName || lastName || phone || dateOfBirth)) {
+      const personUpdate: UpdatePersonDto = {};
+      if (firstName !== undefined) personUpdate.firstName = firstName;
+      if (lastName !== undefined) personUpdate.lastName = lastName;
+      if (phone !== undefined) personUpdate.phone = phone;
+      if (dateOfBirth !== undefined) personUpdate.dateOfBirth = dateOfBirth;
+
+      await this.personsService.update(
+        existing.personId.toString(),
+        personUpdate,
+      );
+    }
+
     const $set = sanitizeFlat({
-      ...dto,
-      companyId: dto.companyId ? new Types.ObjectId(dto.companyId) : undefined,
+      ...userFields,
+      companyId: userFields.companyId
+        ? new Types.ObjectId(userFields.companyId)
+        : undefined,
     });
 
     const updated = await this.userModel

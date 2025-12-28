@@ -574,9 +574,9 @@ export class SponsorInvitationsService {
       },
     );
 
-    // Generar ticket si NO es staff
+    // Generar ticket solo para becados (SCHOLARSHIP)
     let ticket: any = null;
-    if (invitation.participantType !== ParticipantType.STAFF) {
+    if (invitation.participantType === ParticipantType.SCHOLARSHIP) {
       ticket = await this.ticketsService.generateTicketForInvitation({
         userId,
         eventId: invitation.eventId.toString(),
@@ -668,9 +668,9 @@ export class SponsorInvitationsService {
       },
     );
 
-    // Generar ticket si NO es staff
+    // Generar ticket solo para becados (SCHOLARSHIP)
     let ticket: any = null;
-    if (invitation.participantType !== ParticipantType.STAFF) {
+    if (invitation.participantType === ParticipantType.SCHOLARSHIP) {
       ticket = await this.ticketsService.generateTicketForInvitation({
         userId,
         eventId: invitation.eventId.toString(),

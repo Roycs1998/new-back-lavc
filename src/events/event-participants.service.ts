@@ -60,7 +60,6 @@ export class EventParticipantsService {
       }
     }
 
-    // Create participant
     const participant = new this.eventParticipantModel({
       eventId: eventObjectId,
       userId: userObjectId,
@@ -73,7 +72,6 @@ export class EventParticipantsService {
 
     const saved = await participant.save();
 
-    // Increment quota usage if applicable
     if (registerDto.participantType !== ParticipantType.REGULAR) {
       await this.eventSponsorsService.incrementQuotaUsage(
         registerDto.eventSponsorId,
@@ -90,6 +88,10 @@ export class EventParticipantsService {
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
+      })
+      .populate({
+        path: 'speaker',
+        populate: [{ path: 'person' }, { path: 'companyId' }],
       })
       .exec();
 
@@ -156,6 +158,10 @@ export class EventParticipantsService {
         path: 'sponsor',
         populate: { path: 'company' },
       })
+      .populate({
+        path: 'speaker',
+        populate: [{ path: 'person' }, { path: 'companyId' }],
+      })
       .sort({ [sortBy]: sortOrder })
       .skip(skip)
       .limit(limit)
@@ -216,6 +222,10 @@ export class EventParticipantsService {
         path: 'sponsor',
         populate: { path: 'company' },
       })
+      .populate({
+        path: 'speaker',
+        populate: [{ path: 'person' }, { path: 'companyId' }],
+      })
       .sort({ registeredAt: -1 })
       .exec();
 
@@ -239,6 +249,10 @@ export class EventParticipantsService {
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
+      })
+      .populate({
+        path: 'speaker',
+        populate: [{ path: 'person' }, { path: 'companyId' }],
       })
       .exec();
 
@@ -288,13 +302,16 @@ export class EventParticipantsService {
         path: 'sponsor',
         populate: { path: 'company' },
       })
+      .populate({
+        path: 'speaker',
+        populate: [{ path: 'person' }, { path: 'companyId' }],
+      })
       .exec();
 
     return toDto(populated!, EventParticipantDto);
   }
 
   async checkStaffAccess(userId: string, eventId: string): Promise<boolean> {
-    // Check if user is registered as staff for this event
     const participant = await this.eventParticipantModel.findOne({
       userId: new Types.ObjectId(userId),
       eventId: new Types.ObjectId(eventId),
@@ -306,7 +323,6 @@ export class EventParticipantsService {
       return false;
     }
 
-    // Check if event is currently active (between startDate and endDate)
     const event = await this.eventModel.findById(new Types.ObjectId(eventId));
 
     if (!event) {
@@ -332,6 +348,10 @@ export class EventParticipantsService {
         path: 'sponsor',
         populate: { path: 'company' },
       })
+      .populate({
+        path: 'speaker',
+        populate: [{ path: 'person' }, { path: 'companyId' }],
+      })
       .sort({ registeredAt: -1 })
       .exec();
 
@@ -355,13 +375,11 @@ export class EventParticipantsService {
     const eventObjectId = new Types.ObjectId(eventId);
     const userObjectId = new Types.ObjectId(dto.userId);
 
-    // Verificar que el evento existe
     const event = await this.eventModel.findById(eventObjectId);
     if (!event) {
       throw new NotFoundException('Evento no encontrado');
     }
 
-    // Verificar que el usuario ya no esté asignado como staff operativo
     const existing = await this.eventParticipantModel.findOne({
       eventId: eventObjectId,
       userId: userObjectId,
@@ -428,5 +446,71 @@ export class EventParticipantsService {
     participant.isActive = false;
     participant.cancelledAt = new Date();
     await participant.save();
+  }
+
+
+  async syncSpeakersAsParticipants(
+    eventId: string,
+    speakerIds: string[],
+  ): Promise<void> {
+    const eventObjectId = new Types.ObjectId(eventId);
+
+    const currentParticipants = await this.eventParticipantModel.find({
+      eventId: eventObjectId,
+      participantType: ParticipantType.SPEAKER,
+      isActive: true,
+    });
+
+    const currentSpeakerIds = currentParticipants.map((p) =>
+      p.speakerId?.toString(),
+    );
+    const newSpeakerIds = speakerIds.map((id) => id.toString());
+
+    const removedSpeakerIds = currentSpeakerIds.filter(
+      (id) => id && !newSpeakerIds.includes(id),
+    );
+
+    if (removedSpeakerIds.length > 0) {
+      await this.eventParticipantModel.updateMany(
+        {
+          eventId: eventObjectId,
+          speakerId: {
+            $in: removedSpeakerIds.map((id) => new Types.ObjectId(id)),
+          },
+          participantType: ParticipantType.SPEAKER,
+        },
+        {
+          $set: { isActive: false, cancelledAt: new Date() },
+        },
+      );
+    }
+
+    const speakersToAdd = newSpeakerIds.filter(
+      (id) => !currentSpeakerIds.includes(id),
+    );
+
+    for (const speakerId of speakersToAdd) {
+      const existing = await this.eventParticipantModel.findOne({
+        eventId: eventObjectId,
+        speakerId: new Types.ObjectId(speakerId),
+        participantType: ParticipantType.SPEAKER,
+      });
+
+      if (existing) {
+        if (!existing.isActive) {
+          existing.isActive = true;
+          existing.cancelledAt = undefined;
+          await existing.save();
+        }
+      } else {
+        await this.eventParticipantModel.create({
+          eventId: eventObjectId,
+          speakerId: new Types.ObjectId(speakerId),
+          participantType: ParticipantType.SPEAKER,
+          registeredAt: new Date(),
+          isActive: true,
+        });
+      }
+    }
   }
 }
