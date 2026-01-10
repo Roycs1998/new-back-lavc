@@ -4,7 +4,7 @@ import type { Request } from 'express';
 export interface CurrentUserData {
   id: string;
   email: string;
-  role: string;
+  roles: string[];
   companyId?: string;
 }
 

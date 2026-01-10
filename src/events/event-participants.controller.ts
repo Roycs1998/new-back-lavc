@@ -96,17 +96,13 @@ export class EventParticipantsController {
   async listParticipants(
     @Param('eventId', ParseObjectIdPipe) eventId: string,
     @Query() query: ListParticipantsQueryDto,
+    @CurrentUser() currentUser: CurrentUserData,
   ) {
-    return await this.eventParticipantsService.getParticipantsByEvent(eventId, {
-      page: query.page,
-      limit: query.limit,
-      sponsorId: query.sponsorId,
-      participantType: query.participantType,
-      isActive: query.isActive,
-      search: query.search,
-      sortBy: query.sortBy,
-      sortOrder: query.sortOrder,
-    });
+    return await this.eventParticipantsService.getParticipantsByEvent(
+      eventId,
+      query,
+      currentUser,
+    );
   }
 
   @Get('me')
@@ -222,7 +218,7 @@ export class EventParticipantsController {
   }
 
   @Delete(':participantId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancelar participación',
@@ -289,14 +285,13 @@ export class EventParticipantsController {
 
     return {
       hasAccess,
-      isStaff: hasAccess, // Si tiene acceso, es staff
-      isEventActive: hasAccess, // Si tiene acceso, el evento está activo
+      isStaff: hasAccess,
+      isEventActive: hasAccess,
     };
   }
 
   @Post('sync-speakers')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Sincronizar speakers del evento con participantes',
     description:
@@ -312,7 +307,10 @@ export class EventParticipantsController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Speakers sincronizados exitosamente' },
+        message: {
+          type: 'string',
+          example: 'Speakers sincronizados exitosamente',
+        },
         syncedCount: { type: 'number', example: 3 },
       },
     },

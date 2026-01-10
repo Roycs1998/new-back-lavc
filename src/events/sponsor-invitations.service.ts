@@ -66,17 +66,21 @@ export class SponsorInvitationsService {
   }
 
   private async getCheapestTicket(eventId: string): Promise<string> {
-    const cheapestTicket = await this.ticketTypeModel
-      .findOne({ eventId: new Types.ObjectId(eventId) })
-      .sort({ price: 1 })
-      .select('_id')
+    // Obtener todos los tickets del evento
+    const tickets = await this.ticketTypeModel
+      .find({ eventId: new Types.ObjectId(eventId) })
       .exec();
 
-    if (!cheapestTicket) {
+    if (!tickets || tickets.length === 0) {
       throw new NotFoundException(
         'No hay tipos de tickets disponibles para este evento',
       );
     }
+
+    // TODO: Implementar conversión de moneda usando rates del evento
+    // Por ahora, ordenar por precio y asumir que todos están en la misma moneda
+    // o que los precios ya están normalizados
+    const cheapestTicket = tickets.sort((a, b) => a.price - b.price)[0];
 
     return (cheapestTicket._id as Types.ObjectId).toString();
   }
@@ -88,17 +92,19 @@ export class SponsorInvitationsService {
   ): Promise<SponsorInvitationDto> {
     let sponsor: any = null;
     let eventId: Types.ObjectId;
+    let sponsorIdToSave: Types.ObjectId | null = null;
 
-    // Si es OPERATIONAL_STAFF, no requiere sponsor
     if (createDto.participantType === ParticipantType.OPERATIONAL_STAFF) {
-      // eventSponsorId en este caso es el eventId
+      // Para OPERATIONAL_STAFF, eventSponsorId es el eventId
       eventId = new Types.ObjectId(eventSponsorId);
 
-      // Verificar que el evento existe
       const event = await this.eventModel.findById(eventId);
       if (!event) {
         throw new NotFoundException('Evento no encontrado');
       }
+
+      // Guardar el companyId del evento como eventSponsorId
+      sponsorIdToSave = event.companyId;
     } else {
       // Para otros tipos, requiere sponsor
       sponsor = await this.eventSponsorsService.findBySponsorId(eventSponsorId);
@@ -112,6 +118,7 @@ export class SponsorInvitationsService {
       }
 
       eventId = sponsor.eventId;
+      sponsorIdToSave = new Types.ObjectId(eventSponsorId);
 
       const availableQuota = this.getAvailableQuota(
         sponsor,
@@ -136,30 +143,37 @@ export class SponsorInvitationsService {
       }
     }
 
-    let ticketTypeId = createDto.ticketTypeId;
-    if (!ticketTypeId) {
-      ticketTypeId = await this.getCheapestTicket(eventId.toString());
-    } else {
-      const ticketExists = await this.ticketTypeModel.exists({
-        _id: new Types.ObjectId(ticketTypeId),
-        eventId: eventId,
-      });
+    // Solo becados (SCHOLARSHIP) tienen ticket
+    let ticketTypeId: string | null = null;
+    if (createDto.participantType === ParticipantType.SCHOLARSHIP) {
+      ticketTypeId = createDto.ticketTypeId || null;
 
-      if (!ticketExists) {
-        throw new BadRequestException(
-          'El ticket especificado no pertenece a este evento',
-        );
+      if (!ticketTypeId) {
+        // Obtener el ticket más barato
+        ticketTypeId = await this.getCheapestTicket(eventId.toString());
+      } else {
+        // Validar que el ticket existe y pertenece al evento
+        const ticketExists = await this.ticketTypeModel.exists({
+          _id: new Types.ObjectId(ticketTypeId),
+          eventId: eventId,
+        });
+
+        if (!ticketExists) {
+          throw new BadRequestException(
+            'El ticket especificado no pertenece a este evento',
+          );
+        }
       }
     }
 
     const code = await this.generateUniqueCode();
 
     const invitation = new this.invitationModel({
-      eventSponsorId: sponsor ? new Types.ObjectId(eventSponsorId) : null,
+      eventSponsorId: sponsorIdToSave,
       eventId: eventId,
       code,
       participantType: createDto.participantType,
-      ticketTypeId: new Types.ObjectId(ticketTypeId),
+      ticketTypeId: ticketTypeId ? new Types.ObjectId(ticketTypeId) : null,
       usageType: createDto.usageType,
       maxUses:
         createDto.usageType === InvitationUsageType.MULTIPLE
@@ -230,9 +244,8 @@ export class SponsorInvitationsService {
       sponsorId?: string;
       participantType?: ParticipantType;
       usageType?: InvitationUsageType;
-      isActive?: boolean;
-      isExpired?: boolean;
-      hasAvailableUses?: boolean;
+      isActive?: number;
+      hasAvailableUses?: number;
       page?: number;
       limit?: number;
       sortBy?: string;
@@ -259,19 +272,13 @@ export class SponsorInvitationsService {
       eventId: new Types.ObjectId(eventId),
     };
 
-    // Si el usuario es company_admin, filtrar por su empresa
     if (userCompanyId) {
-      // Obtener todos los sponsors de la empresa del usuario
       const companySponsors =
         await this.eventSponsorsService.findByCompanyId(userCompanyId);
       const sponsorIds = companySponsors.map((s: any) => s._id);
 
-      // Filtrar invitaciones solo de esos sponsors
       query.eventSponsorId = { $in: sponsorIds };
-    }
-
-    // Aplicar filtros opcionales
-    if (filters?.sponsorId) {
+    } else if (filters?.sponsorId) {
       query.eventSponsorId = new Types.ObjectId(filters.sponsorId);
     }
 
@@ -284,20 +291,9 @@ export class SponsorInvitationsService {
     }
 
     if (filters?.isActive !== undefined) {
-      query.isActive = filters.isActive;
+      query.isActive = filters.isActive === 1;
     }
 
-    // Filtro de expiración
-    if (filters?.isExpired !== undefined) {
-      const now = new Date();
-      if (filters.isExpired) {
-        query.expiresAt = { $lte: now };
-      } else {
-        query.$or = [{ expiresAt: null }, { expiresAt: { $gt: now } }];
-      }
-    }
-
-    // Contar total de documentos que coinciden con el query
     const total = await this.invitationModel.countDocuments(query);
 
     // Calcular skip
@@ -322,18 +318,15 @@ export class SponsorInvitationsService {
 
     let filteredInvitations = invitations;
 
-    // Filtro de usos disponibles (post-query porque requiere lógica)
     if (filters?.hasAvailableUses !== undefined) {
       filteredInvitations = invitations.filter((inv) => {
-        if (filters.hasAvailableUses) {
-          // Tiene usos disponibles
+        if (filters.hasAvailableUses === 1) {
           if (inv.usageType === InvitationUsageType.SINGLE) {
             return inv.currentUses === 0;
           } else {
             return inv.maxUses === null || inv.currentUses < (inv.maxUses || 0);
           }
         } else {
-          // No tiene usos disponibles
           if (inv.usageType === InvitationUsageType.SINGLE) {
             return inv.currentUses >= 1;
           } else {
@@ -345,7 +338,6 @@ export class SponsorInvitationsService {
       });
     }
 
-    // Calcular metadata de paginación
     const totalPages = Math.ceil(total / limit);
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
@@ -505,20 +497,23 @@ export class SponsorInvitationsService {
       validation.errors.push('La invitación no tiene usos disponibles');
     }
 
-    const sponsor = await this.eventSponsorsService.findBySponsorId(
-      invitation.eventSponsorId.toString(),
-    );
-
-    const availableQuota = this.getAvailableQuota(
-      sponsor!,
-      invitation.participantType,
-    );
-
-    if (availableQuota === 0) {
-      validation.valid = false;
-      validation.errors.push(
-        'No hay cuota disponible para este tipo de participante',
+    // Solo validar cuota si NO es OPERATIONAL_STAFF
+    if (invitation.participantType !== ParticipantType.OPERATIONAL_STAFF) {
+      const sponsor = await this.eventSponsorsService.findBySponsorId(
+        invitation.eventSponsorId.toString(),
       );
+
+      const availableQuota = this.getAvailableQuota(
+        sponsor!,
+        invitation.participantType,
+      );
+
+      if (availableQuota === 0) {
+        validation.valid = false;
+        validation.errors.push(
+          'No hay cuota disponible para este tipo de participante',
+        );
+      }
     }
 
     return {
@@ -538,19 +533,19 @@ export class SponsorInvitationsService {
       throw new NotFoundException('Código de invitación no válido');
     }
 
-    // Validar estado de la invitación
     this.validateInvitationStatus(invitation);
 
-    // Verificar cuota disponible
-    const hasQuota = await this.eventSponsorsService.checkQuotaAvailability(
-      invitation.eventSponsorId.toString(),
-      invitation.participantType,
-    );
-
-    if (!hasQuota) {
-      throw new BadRequestException(
-        'No hay cuota disponible para este tipo de participante',
+    if (invitation.participantType !== ParticipantType.OPERATIONAL_STAFF) {
+      const hasQuota = await this.eventSponsorsService.checkQuotaAvailability(
+        invitation.eventSponsorId.toString(),
+        invitation.participantType,
       );
+
+      if (!hasQuota) {
+        throw new BadRequestException(
+          'No hay cuota disponible para este tipo de participante',
+        );
+      }
     }
 
     // Verificar que el usuario no esté ya registrado
@@ -576,7 +571,10 @@ export class SponsorInvitationsService {
 
     // Generar ticket solo para becados (SCHOLARSHIP)
     let ticket: any = null;
-    if (invitation.participantType === ParticipantType.SCHOLARSHIP) {
+    if (
+      invitation.participantType === ParticipantType.SCHOLARSHIP &&
+      invitation.ticketTypeId
+    ) {
       ticket = await this.ticketsService.generateTicketForInvitation({
         userId,
         eventId: invitation.eventId.toString(),
@@ -585,7 +583,6 @@ export class SponsorInvitationsService {
         participantType: invitation.participantType,
       });
 
-      // Actualizar participante con ticketId
       await this.eventParticipantsService.updateParticipantTicket(
         participant.id,
         ticket._id.toString(),
@@ -623,16 +620,18 @@ export class SponsorInvitationsService {
     // Validar estado de la invitación
     this.validateInvitationStatus(invitation);
 
-    // Verificar cuota disponible
-    const hasQuota = await this.eventSponsorsService.checkQuotaAvailability(
-      invitation.eventSponsorId.toString(),
-      invitation.participantType,
-    );
-
-    if (!hasQuota) {
-      throw new BadRequestException(
-        'No hay cuota disponible para este tipo de participante',
+    // Solo validar cuota si NO es OPERATIONAL_STAFF
+    if (invitation.participantType !== ParticipantType.OPERATIONAL_STAFF) {
+      const hasQuota = await this.eventSponsorsService.checkQuotaAvailability(
+        invitation.eventSponsorId.toString(),
+        invitation.participantType,
       );
+
+      if (!hasQuota) {
+        throw new BadRequestException(
+          'No hay cuota disponible para este tipo de participante',
+        );
+      }
     }
 
     // Crear nuevo usuario
@@ -670,7 +669,10 @@ export class SponsorInvitationsService {
 
     // Generar ticket solo para becados (SCHOLARSHIP)
     let ticket: any = null;
-    if (invitation.participantType === ParticipantType.SCHOLARSHIP) {
+    if (
+      invitation.participantType === ParticipantType.SCHOLARSHIP &&
+      invitation.ticketTypeId
+    ) {
       ticket = await this.ticketsService.generateTicketForInvitation({
         userId,
         eventId: invitation.eventId.toString(),

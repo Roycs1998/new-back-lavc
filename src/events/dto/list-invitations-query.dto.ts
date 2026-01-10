@@ -3,12 +3,12 @@ import { Type } from 'class-transformer';
 import {
   IsOptional,
   IsEnum,
-  IsBoolean,
   IsMongoId,
   IsInt,
   Min,
   Max,
   IsString,
+  IsNumber,
 } from 'class-validator';
 import { ParticipantType } from '../../common/enums/participant-type.enum';
 import { InvitationUsageType } from '../../common/enums/invitation-usage-type.enum';
@@ -71,27 +71,18 @@ export class ListInvitationsQueryDto {
     example: true,
   })
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  isActive?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Filtrar por invitaciones expiradas',
-    example: false,
-  })
-  @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  isExpired?: boolean;
+  @Type(() => Number)
+  @IsNumber()
+  isActive?: number;
 
   @ApiPropertyOptional({
     description: 'Filtrar por invitaciones con usos disponibles',
     example: true,
   })
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  hasAvailableUses?: boolean;
+  @Type(() => Number)
+  @IsNumber()
+  hasAvailableUses?: number;
 
   @ApiPropertyOptional({
     description: 'Campo por el cual ordenar',

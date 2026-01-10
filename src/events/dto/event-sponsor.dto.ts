@@ -21,6 +21,50 @@ class ShortCompanyDto {
   contactEmail?: string;
 }
 
+export class ShortEventDto {
+  @ApiProperty({
+    description: 'ID del evento',
+    example: '66c0da2b6a3aa6ed3c63e001',
+  })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({
+    description: 'Título del evento',
+    example: 'Tech Conference 2024',
+  })
+  @Expose()
+  title!: string;
+
+  @ApiPropertyOptional({
+    description: 'Descripción corta del evento',
+    example: 'El evento tecnológico más importante del año',
+  })
+  @Expose()
+  shortDescription?: string;
+
+  @ApiProperty({
+    description: 'Fecha de inicio del evento',
+    example: '2024-09-15T09:00:00.000Z',
+  })
+  @Expose()
+  startDate!: Date;
+
+  @ApiProperty({
+    description: 'Fecha de fin del evento',
+    example: '2024-09-17T18:00:00.000Z',
+  })
+  @Expose()
+  endDate!: Date;
+
+  @ApiProperty({
+    description: 'Estado del evento',
+    example: 'published',
+  })
+  @Expose()
+  eventStatus!: string;
+}
+
 export class EventSponsorDto {
   @ApiProperty({
     description: 'ID del patrocinador',
@@ -127,6 +171,14 @@ export class EventSponsorDto {
   @Type(() => ShortCompanyDto)
   @Expose()
   company?: ShortCompanyDto;
+
+  @ApiPropertyOptional({
+    description: 'Información del evento',
+    type: ShortEventDto,
+  })
+  @Type(() => ShortEventDto)
+  @Expose()
+  event?: ShortEventDto;
 
   @ApiProperty({
     description: 'Fecha de creación',

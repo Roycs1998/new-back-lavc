@@ -34,8 +34,8 @@ export class SponsorInvitation {
   })
   participantType!: ParticipantType;
 
-  @Prop({ type: Types.ObjectId, ref: 'TicketType', required: true })
-  ticketTypeId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'TicketType' })
+  ticketTypeId?: Types.ObjectId;
 
   @Prop({
     type: String,

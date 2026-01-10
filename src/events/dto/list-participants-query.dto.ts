@@ -7,7 +7,7 @@ import {
   Max,
   IsEnum,
   IsString,
-  IsBoolean,
+  IsNumber,
 } from 'class-validator';
 import { ParticipantType } from '../../common/enums/participant-type.enum';
 
@@ -57,12 +57,11 @@ export class ListParticipantsQueryDto {
 
   @ApiPropertyOptional({
     description: 'Filtrar por estado activo',
-    example: true,
+    example: 1,
   })
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  isActive?: boolean;
+  @IsNumber()
+  isActive?: number;
 
   @ApiPropertyOptional({
     description: 'Buscar por email o nombre del usuario',

@@ -32,6 +32,7 @@ import { SponsorInvitationDto } from './dto/sponsor-invitation.dto';
 import { ListInvitationsQueryDto } from './dto/list-invitations-query.dto';
 import { PaginatedInvitationsDto } from './dto/paginated-invitations.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
@@ -44,10 +45,10 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class EventInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) {}
+  constructor(private readonly invitationsService: SponsorInvitationsService) { }
 
   @Get()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Listar todas las invitaciones del evento',
     description:
@@ -67,8 +68,9 @@ export class EventInvitationsController {
     @Query() filters: ListInvitationsQueryDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
-    const userCompanyId =
-      currentUser.role === 'company_admin' ? currentUser.companyId : undefined;
+    const userCompanyId = currentUser.roles.includes('company_admin')
+      ? currentUser.companyId
+      : undefined;
 
     return await this.invitationsService.getAllInvitationsForEvent(
       eventId,
@@ -83,10 +85,10 @@ export class EventInvitationsController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class SponsorInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) {}
+  constructor(private readonly invitationsService: SponsorInvitationsService) { }
 
   @Post()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Crear invitación',
     description:
@@ -122,7 +124,7 @@ export class SponsorInvitationsController {
   }
 
   @Get()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Listar invitaciones',
     description: 'Obtiene todas las invitaciones de un patrocinador.',
@@ -183,7 +185,7 @@ export class SponsorInvitationsController {
   }
 
   @Patch(':invitationId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Actualizar invitación',
     description:
@@ -222,7 +224,7 @@ export class SponsorInvitationsController {
   }
 
   @Delete(':invitationId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Desactivar invitación',
@@ -257,7 +259,7 @@ export class SponsorInvitationsController {
 @ApiTags('Invitaciones Públicas')
 @Controller('invitations')
 export class PublicInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) {}
+  constructor(private readonly invitationsService: SponsorInvitationsService) { }
 
   @Get(':code/validate')
   @Public()
@@ -281,6 +283,7 @@ export class PublicInvitationsController {
 
   @Post(':code/accept')
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Aceptar invitación',
     description:
@@ -305,7 +308,6 @@ export class PublicInvitationsController {
     @Body() acceptDto: AcceptInvitationDto,
     @CurrentUser() currentUser?: CurrentUserData,
   ) {
-    // Si hay usuario autenticado, usar su ID
     if (currentUser?.id) {
       return await this.invitationsService.acceptInvitationWithAuth(
         code,
@@ -313,7 +315,6 @@ export class PublicInvitationsController {
       );
     }
 
-    // Si no hay sesión, validar que se proporcionaron datos de registro
     if (
       !acceptDto.email ||
       !acceptDto.password ||
@@ -325,7 +326,6 @@ export class PublicInvitationsController {
       );
     }
 
-    // Aceptar con auto-registro
     return await this.invitationsService.acceptInvitationWithSignup(
       code,
       acceptDto,

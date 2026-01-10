@@ -6,9 +6,7 @@ import {
   Patch,
   Param,
   Delete,
-  HttpCode,
   UseGuards,
-  HttpStatus,
   Query,
 } from '@nestjs/common';
 import { SpeakersService } from './speakers.service';
@@ -40,16 +38,12 @@ import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 @ApiTags('Oradores')
 @Controller('speakers')
 @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
 @ApiBearerAuth('JWT-auth')
 export class SpeakersController {
-  constructor(private readonly speakersService: SpeakersService) {}
+  constructor(private readonly speakersService: SpeakersService) { }
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Crear speaker y su persona en un solo paso' })
   @ApiCreatedResponse({ type: SpeakerDto })
   @ApiBadRequestResponse({
@@ -78,7 +72,6 @@ export class SpeakersController {
   }
 
   @Get(':id')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Obtener una exponente por ID' })
   @ApiResponse({
     status: 200,
@@ -90,8 +83,6 @@ export class SpeakersController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Actualizar un speaker' })
   @ApiOkResponse({ type: SpeakerDto })
   @ApiBadRequestResponse({ description: 'Validación fallida' })
@@ -104,8 +95,6 @@ export class SpeakersController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
     summary: 'Cambiar el estado lógico del speaker (ACTIVE/INACTIVE/DELETED)',
   })
@@ -123,8 +112,6 @@ export class SpeakersController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Eliminar lógicamente un speaker' })
   @ApiOkResponse({ type: SpeakerDto })
   softDelete(

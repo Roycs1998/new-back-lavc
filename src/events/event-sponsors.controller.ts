@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -17,6 +18,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
+  ApiQuery,
   ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -26,21 +28,24 @@ import { EventSponsorsService } from './event-sponsors.service';
 import { CreateEventSponsorDto } from './dto/create-event-sponsor.dto';
 import { UpdateEventSponsorDto } from './dto/update-event-sponsor.dto';
 import { EventSponsorDto } from './dto/event-sponsor.dto';
+import { EventsPaginatedDto } from './dto/events-pagination.dto';
 import { QuotaAvailabilityDto } from './dto/quota-availability.dto';
 import { ParticipantType } from '../common/enums/participant-type.enum';
+import { EventStatus } from '../common/enums/event-status.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator';
+import { CompanyScopeGuard } from 'src/common/guards/company-scope.guard';
 
 @ApiTags('Patrocinadores de Eventos')
 @Controller('events/:eventId/sponsors')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class EventSponsorsController {
-  constructor(private readonly eventSponsorsService: EventSponsorsService) {}
+  constructor(private readonly eventSponsorsService: EventSponsorsService) { }
 
   @Post()
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
@@ -256,5 +261,77 @@ export class EventSponsorsController {
       used,
       remaining,
     };
+  }
+}
+
+@ApiTags('Patrocinadores de Eventos')
+@Controller('event-sponsors/company')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT-auth')
+export class CompanySponsorEventsController {
+  constructor(private readonly eventSponsorsService: EventSponsorsService) { }
+
+  @Get(':companyId/events')
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
+  @ApiOperation({
+    summary: 'Obtener eventos patrocinados por una empresa (con paginación)',
+    description:
+      'Retorna todos los eventos donde la empresa es patrocinadora. ' +
+      'Por defecto muestra TODOS los eventos sin importar su estado. ' +
+      'Puedes filtrar por estado(s) específico(s) usando el query parameter "status". ' +
+      'Soporta paginación mediante los parámetros page y limit.',
+  })
+  @ApiParam({
+    name: 'companyId',
+    description: 'ID de la empresa patrocinadora',
+    example: '66c0da2b6a3aa6ed3c63e002',
+  })
+  @ApiQuery({
+    name: 'status',
+    description:
+      'Estado(s) de eventos a filtrar (separados por coma). ' +
+      'Ejemplos: "published" para solo activos, "published,completed" para activos e históricos. ' +
+      'Si no se especifica, retorna TODOS los eventos.',
+    required: false,
+    example: 'published',
+  })
+  @ApiQuery({
+    name: 'page',
+    description: 'Número de página (comienza en 1)',
+    required: false,
+    example: 1,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Cantidad de elementos por página (por defecto: 10)',
+    required: false,
+    example: 10,
+    type: Number,
+  })
+  @ApiOkResponse({
+    type: EventsPaginatedDto,
+    description:
+      'Lista paginada de eventos patrocinados, ordenados por fecha de inicio (más recientes primero)',
+  })
+  async getCompanySponsoredEvents(
+    @Param('companyId', ParseObjectIdPipe) companyId: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<EventsPaginatedDto> {
+    const eventStatuses = status
+      ? (status.split(',').map((s) => s.trim()) as EventStatus[])
+      : undefined;
+
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 10;
+
+    return await this.eventSponsorsService.getEventsByCompany(
+      companyId,
+      eventStatuses,
+      pageNumber,
+      limitNumber,
+    );
   }
 }

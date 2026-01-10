@@ -24,7 +24,10 @@ import { TicketsModule } from 'src/tickets/tickets.module';
 import { EventSponsorsService } from './event-sponsors.service';
 import { EventParticipantsService } from './event-participants.service';
 import { SponsorInvitationsService } from './sponsor-invitations.service';
-import { EventSponsorsController } from './event-sponsors.controller';
+import {
+  EventSponsorsController,
+  CompanySponsorEventsController,
+} from './event-sponsors.controller';
 import { EventParticipantsController } from './event-participants.controller';
 import {
   EventInvitationsController,
@@ -52,6 +55,7 @@ import { OperationalStaffInvitationsController } from './operational-staff-invit
   controllers: [
     EventsController,
     EventSponsorsController,
+    CompanySponsorEventsController,
     EventParticipantsController,
     EventInvitationsController,
     SponsorInvitationsController,

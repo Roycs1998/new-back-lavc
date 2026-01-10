@@ -45,7 +45,7 @@ import { TicketTypeDto } from './dto/ticket-type.dto';
 @ApiTags('Eventos')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(private readonly eventsService: EventsService) { }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
@@ -116,7 +116,7 @@ export class EventsController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({ summary: 'Actualizar un evento por ID' })
   @ApiBearerAuth('JWT-auth')
   @ApiOkResponse({

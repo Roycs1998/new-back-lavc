@@ -39,7 +39,7 @@ import { UserPaginatedDto } from './dto/user-pagination.dto';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -104,7 +104,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.PLATFORM_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Actualizar un usuario por ID (solo admin plataforma)',
   })
@@ -139,7 +139,6 @@ export class UsersController {
   }
 
   @Patch(':id/verify-email')
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({ summary: 'Verificar el correo electrónico del usuario' })
   @ApiResponse({
     status: 200,

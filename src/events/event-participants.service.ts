@@ -14,9 +14,14 @@ import { RegisterParticipantDto } from './dto/register-participant.dto';
 import { EventParticipantDto } from './dto/event-participant.dto';
 import { AssignOperationalStaffDto } from './dto/assign-operational-staff.dto';
 import { EventSponsorsService } from './event-sponsors.service';
+import {
+  EventSponsor,
+  EventSponsorDocument,
+} from './entities/event-sponsor.entity';
 import { ParticipantType } from '../common/enums/participant-type.enum';
 import { Event, EventDocument } from './entities/event.entity';
 import { toDto } from '../utils/toDto';
+import { ListParticipantsQueryDto } from './dto/list-participants-query.dto';
 
 @Injectable()
 export class EventParticipantsService {
@@ -25,6 +30,8 @@ export class EventParticipantsService {
     private eventParticipantModel: Model<EventParticipantDocument>,
     @InjectModel(Event.name)
     private eventModel: Model<EventDocument>,
+    @InjectModel(EventSponsor.name)
+    private eventSponsorModel: Model<EventSponsorDocument>,
     private eventSponsorsService: EventSponsorsService,
   ) { }
 
@@ -35,7 +42,6 @@ export class EventParticipantsService {
     const eventObjectId = new Types.ObjectId(eventId);
     const userObjectId = new Types.ObjectId(registerDto.userId);
 
-    // Check if user is already registered for this event
     const existing = await this.eventParticipantModel.findOne({
       eventId: eventObjectId,
       userId: userObjectId,
@@ -46,8 +52,10 @@ export class EventParticipantsService {
       throw new ConflictException('User is already registered for this event');
     }
 
-    // Check quota availability if using sponsor quota
-    if (registerDto.participantType !== ParticipantType.REGULAR) {
+    if (
+      registerDto.participantType !== ParticipantType.REGULAR &&
+      registerDto.participantType !== ParticipantType.OPERATIONAL_STAFF
+    ) {
       const hasQuota = await this.eventSponsorsService.checkQuotaAvailability(
         registerDto.eventSponsorId,
         registerDto.participantType,
@@ -72,7 +80,10 @@ export class EventParticipantsService {
 
     const saved = await participant.save();
 
-    if (registerDto.participantType !== ParticipantType.REGULAR) {
+    if (
+      registerDto.participantType !== ParticipantType.REGULAR &&
+      registerDto.participantType !== ParticipantType.OPERATIONAL_STAFF
+    ) {
       await this.eventSponsorsService.incrementQuotaUsage(
         registerDto.eventSponsorId,
         registerDto.participantType,
@@ -100,16 +111,8 @@ export class EventParticipantsService {
 
   async getParticipantsByEvent(
     eventId: string,
-    options?: {
-      page?: number;
-      limit?: number;
-      sponsorId?: string;
-      participantType?: string;
-      isActive?: boolean;
-      search?: string;
-      sortBy?: string;
-      sortOrder?: 'asc' | 'desc';
-    },
+    options?: ListParticipantsQueryDto,
+    currentUser?: { id: string; companyId?: string },
   ): Promise<{
     data: EventParticipantDto[];
     meta: {
@@ -127,10 +130,22 @@ export class EventParticipantsService {
     const sortBy = options?.sortBy || 'registeredAt';
     const sortOrder = options?.sortOrder === 'asc' ? 1 : -1;
 
-    // Build filter query
-    const filter: any = { eventId: new Types.ObjectId(eventId) };
+    const filter: any = {
+      eventId: new Types.ObjectId(eventId),
+      isActive: options?.isActive !== undefined ? options.isActive == 1 : true,
+    };
 
-    if (options?.sponsorId) {
+    if (currentUser?.companyId) {
+      const sponsor = await this.eventSponsorModel.findOne({
+        eventId: new Types.ObjectId(eventId),
+        companyId: new Types.ObjectId(currentUser.companyId),
+        isActive: true,
+      });
+
+      if (sponsor) {
+        filter.eventSponsorId = sponsor._id;
+      }
+    } else if (options?.sponsorId) {
       filter.eventSponsorId = new Types.ObjectId(options.sponsorId);
     }
 
@@ -138,17 +153,10 @@ export class EventParticipantsService {
       filter.participantType = options.participantType;
     }
 
-    if (options?.isActive !== undefined) {
-      filter.isActive = options.isActive;
-    }
-
-    // If search is provided, we need to populate user first and filter
     const query = this.eventParticipantModel.find(filter);
 
-    // Get total count for pagination
     const total = await this.eventParticipantModel.countDocuments(filter);
 
-    // Apply sorting, pagination, and population
     const participants = await query
       .populate({
         path: 'user',
@@ -281,10 +289,10 @@ export class EventParticipantsService {
 
     const saved = await participant.save();
 
-    // Decrement quota usage if applicable
     if (
       participant.eventSponsorId &&
-      participant.participantType !== ParticipantType.REGULAR
+      participant.participantType !== ParticipantType.REGULAR &&
+      participant.participantType !== ParticipantType.OPERATIONAL_STAFF
     ) {
       await this.eventSponsorsService.decrementQuotaUsage(
         participant.eventSponsorId.toString(),
@@ -447,7 +455,6 @@ export class EventParticipantsService {
     participant.cancelledAt = new Date();
     await participant.save();
   }
-
 
   async syncSpeakersAsParticipants(
     eventId: string,

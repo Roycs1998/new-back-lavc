@@ -36,7 +36,7 @@ import { MessageResponseDto } from './dto/message-response.dto';
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)

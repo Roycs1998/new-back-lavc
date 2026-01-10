@@ -39,14 +39,10 @@ import { UpdateTicketTypeDto } from './dto/update-ticket-type.dto';
 
 type SortDir = 1 | -1;
 
-/**
- * Interfaz para el usuario que realiza la petición
- * Compatible con CurrentUserData del decorador @CurrentUser
- */
 interface RequestingUser {
   id: string;
   email?: string;
-  role: string; // Viene como string del JWT, se compara con UserRole enum
+  roles: string[];
   companyId?: string;
 }
 
@@ -206,9 +202,9 @@ export class EventsService {
     }
 
     // Lógica basada en el rol del usuario cuando NO se especifica eventStatus
-    const userRole = requestingUser?.role;
+    const userRoles = requestingUser?.roles || [];
 
-    if (userRole === UserRole.USER || !requestingUser) {
+    if (userRoles.includes(UserRole.USER) || !requestingUser) {
       // Usuarios normales o anónimos: solo ven eventos PUBLISHED o COMPLETED
       filters.eventStatus = {
         $in: [EventStatus.PUBLISHED, EventStatus.COMPLETED],
@@ -218,7 +214,7 @@ export class EventsService {
           $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
         },
       ];
-    } else if (userRole === UserRole.COMPANY_ADMIN) {
+    } else if (userRoles.includes(UserRole.COMPANY_ADMIN)) {
       // Company admins: ven todos los estados excepto DELETED
       filters.eventStatus = { $ne: EventStatus.DELETED };
       filters.$and = [
@@ -226,7 +222,7 @@ export class EventsService {
           $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
         },
       ];
-    } else if (userRole === UserRole.PLATFORM_ADMIN) {
+    } else if (userRoles.includes(UserRole.PLATFORM_ADMIN)) {
       // Platform admins: ven todos los estados excepto DELETED
       filters.eventStatus = { $ne: EventStatus.DELETED };
       filters.$and = [
@@ -253,7 +249,7 @@ export class EventsService {
   ): { companyId?: Types.ObjectId } {
     // Si el usuario es COMPANY_ADMIN, siempre filtrar por su companyId
     if (
-      requestingUser?.role === UserRole.COMPANY_ADMIN &&
+      requestingUser?.roles.includes(UserRole.COMPANY_ADMIN) &&
       requestingUser?.companyId
     ) {
       return { companyId: toObjectId(requestingUser.companyId) };
@@ -283,7 +279,6 @@ export class EventsService {
       ],
     };
   }
-
 
   async findAll(
     filterDto: EventFilterDto,
@@ -516,7 +511,7 @@ export class EventsService {
     }
 
     if (
-      requestingUser?.role === UserRole.COMPANY_ADMIN &&
+      requestingUser?.roles.includes(UserRole.COMPANY_ADMIN) &&
       requestingUser?.companyId
     ) {
       if (event.companyId._id.toString() !== requestingUser.companyId) {
@@ -526,7 +521,7 @@ export class EventsService {
       }
     }
 
-    if (requestingUser?.role === UserRole.USER || !requestingUser) {
+    if (requestingUser?.roles.includes(UserRole.USER) || !requestingUser) {
       if (
         ![
           EventStatus.PUBLISHED,

@@ -86,14 +86,6 @@ EventParticipantSchema.virtual('ticket', {
   justOne: true,
 });
 
-EventParticipantSchema.index(
-  { eventId: 1, userId: 1 },
-  { unique: true, sparse: true },
-);
-EventParticipantSchema.index(
-  { eventId: 1, speakerId: 1 },
-  { unique: true, sparse: true },
-);
 EventParticipantSchema.index({ eventSponsorId: 1 });
 EventParticipantSchema.index({ speakerId: 1 });
 EventParticipantSchema.index({ participantType: 1 });

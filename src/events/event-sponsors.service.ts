@@ -12,16 +12,17 @@ import {
 } from './entities/event-sponsor.entity';
 import { CreateEventSponsorDto } from './dto/create-event-sponsor.dto';
 import { UpdateEventSponsorDto } from './dto/update-event-sponsor.dto';
-import { EventSponsorDto } from './dto/event-sponsor.dto';
+import { EventSponsorDto, ShortEventDto } from './dto/event-sponsor.dto';
 import { ParticipantType } from '../common/enums/participant-type.enum';
 import { toDto } from '../utils/toDto';
+import { EventStatus } from 'src/common/enums/event-status.enum';
 
 @Injectable()
 export class EventSponsorsService {
   constructor(
     @InjectModel(EventSponsor.name)
     private eventSponsorModel: Model<EventSponsorDocument>,
-  ) {}
+  ) { }
 
   async addSponsorToEvent(
     eventId: string,
@@ -277,5 +278,65 @@ export class EventSponsorsService {
     return await this.eventSponsorModel
       .find({ companyId: new Types.ObjectId(companyId), isActive: true })
       .exec();
+  }
+
+  async getEventsByCompany(
+    companyId: string,
+    eventStatuses?: EventStatus[],
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    data: ShortEventDto[];
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  }> {
+    const populateOptions: any = {
+      path: 'eventId',
+    };
+
+    if (eventStatuses && eventStatuses.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      populateOptions.match = { eventStatus: { $in: eventStatuses } };
+    }
+
+    const allSponsors = await this.eventSponsorModel
+      .find({ companyId: new Types.ObjectId(companyId), isActive: true })
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      .populate(populateOptions)
+      .populate('company')
+      .populate('event')
+      .exec();
+
+    const validSponsors = allSponsors.filter((s) => s.eventId != null);
+
+    const allEventsDto = validSponsors
+      .map((s) => toDto(s, EventSponsorDto))
+      .map((s) => s.event!);
+
+    allEventsDto.sort((a, b) => {
+      const eventA = a.startDate;
+      const eventB = b.startDate;
+      const dateA = eventA ? new Date(eventA) : new Date(0);
+      const dateB = eventB ? new Date(eventB) : new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    const totalItems = allEventsDto.length;
+    const totalPages = Math.ceil(totalItems / limit);
+    const currentPage = Math.min(Math.max(1, page), totalPages || 1);
+    const skip = (currentPage - 1) * limit;
+    const paginatedEvents = allEventsDto.slice(skip, skip + limit);
+
+    return {
+      data: paginatedEvents,
+      totalItems,
+      totalPages,
+      currentPage,
+      hasNextPage: currentPage < totalPages,
+      hasPreviousPage: currentPage > 1,
+    };
   }
 }
