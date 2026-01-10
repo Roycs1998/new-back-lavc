@@ -71,6 +71,13 @@ export class PersonDto {
   createdAt?: Date;
 
   @ApiPropertyOptional({
+    description: 'URL del avatar/foto de la persona',
+    example: 'https://cdn.ejemplo.com/upload/speakers/123456-uuid-photo.jpg',
+  })
+  @Expose()
+  avatar?: string;
+
+  @ApiPropertyOptional({
     description: 'Última fecha de actualización',
     example: '2025-08-25T11:20:00.000Z',
   })

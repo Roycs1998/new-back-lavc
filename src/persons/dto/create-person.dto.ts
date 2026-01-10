@@ -24,7 +24,7 @@ export class CreatePersonDto {
   @IsString({ message: 'El nombre debe ser texto' })
   @MinLength(2, { message: 'El nombre debe tener al menos 2 caracteres' })
   @MaxLength(50, { message: 'El nombre no puede exceder 50 caracteres' })
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: string }) => value.trim())
   firstName: string;
 
   @ApiProperty({
@@ -37,7 +37,7 @@ export class CreatePersonDto {
   @IsString({ message: 'El apellido debe ser texto' })
   @MinLength(2, { message: 'El apellido debe tener al menos 2 caracteres' })
   @MaxLength(50, { message: 'El apellido no puede exceder 50 caracteres' })
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: string }) => value.trim())
   lastName: string;
 
   @ApiPropertyOptional({
@@ -47,7 +47,7 @@ export class CreatePersonDto {
   })
   @IsOptional()
   @IsEmail({}, { message: 'El email debe tener un formato válido' })
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
   email?: string;
 
   @ApiPropertyOptional({
@@ -70,6 +70,14 @@ export class CreatePersonDto {
   @IsOptional()
   @IsDateString({}, { message: 'La fecha debe estar en formato ISO 8601' })
   dateOfBirth?: string;
+
+  @ApiPropertyOptional({
+    description: 'URL del avatar/foto de la persona',
+    example: 'upload/speakers/123456-uuid-photo.jpg',
+  })
+  @IsOptional()
+  @IsString({ message: 'El avatar debe ser texto' })
+  avatar?: string;
 
   @ApiProperty({
     description: 'Type of person',

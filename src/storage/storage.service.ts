@@ -46,6 +46,8 @@ export class StorageService {
     this.cdnUrl = this.configService.get('DO_SPACES_CDN_URL') || endpoint;
 
     this.logger.log('Storage service initialized with DigitalOcean Spaces');
+    this.logger.log(`Configured bucket: ${this.bucket}`);
+    this.logger.log(`Configured region: ${region}`);
   }
 
   /**

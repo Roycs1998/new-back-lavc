@@ -53,10 +53,44 @@ class InvitationSponsorDto {
   company!: InvitationCompanyDto;
 }
 
-class InvitationUseDto {
-  @ApiProperty({ example: '66c0da2b6a3aa6ed3c63e002' })
+class InvitationPersonSimpleDto {
+  @ApiProperty({ example: 'John' })
   @Expose()
-  userId!: string;
+  firstName!: string;
+
+  @ApiProperty({ example: 'Doe' })
+  @Expose()
+  lastName!: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  @Expose()
+  fullName!: string;
+
+  @ApiPropertyOptional({ example: '+1234567890' })
+  @Expose()
+  phone?: string;
+}
+
+class InvitationUserSimpleDto {
+  @ApiProperty({ example: '66c0da2b6a3aa6ed3c63e020' })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({ example: 'user@example.com' })
+  @Expose()
+  email!: string;
+
+  @ApiProperty({ type: InvitationPersonSimpleDto })
+  @Expose()
+  @Type(() => InvitationPersonSimpleDto)
+  person!: InvitationPersonSimpleDto;
+}
+
+class InvitationUseDto {
+  @ApiProperty({ type: InvitationUserSimpleDto })
+  @Expose({ name: 'userId' })
+  @Type(() => InvitationUserSimpleDto)
+  user!: InvitationUserSimpleDto;
 
   @ApiProperty({ example: '66c0da2b6a3aa6ed3c63e005' })
   @Expose()

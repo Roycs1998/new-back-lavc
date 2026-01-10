@@ -15,7 +15,10 @@ import {
 import { CreateSponsorInvitationDto } from './dto/create-sponsor-invitation.dto';
 import { UpdateSponsorInvitationDto } from './dto/update-sponsor-invitation.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
+import { AcceptInvitationForUserDto } from './dto/accept-invitation-for-user.dto';
 import { SponsorInvitationDto } from './dto/sponsor-invitation.dto';
+import { CreateBulkInvitationsDto } from './dto/create-bulk-invitations.dto';
+import { BulkInvitationsResponseDto } from './dto/bulk-invitations-response.dto';
 import { InvitationUsageType } from '../common/enums/invitation-usage-type.enum';
 import { ParticipantType } from '../common/enums/participant-type.enum';
 import { EventSponsorsService } from './event-sponsors.service';
@@ -27,6 +30,7 @@ import { TicketType, TicketTypeDocument } from './entities/ticket.entity';
 import { UserRole } from '../common/enums/user-role.enum';
 import { TicketsService } from '../tickets/tickets.service';
 import { Event, EventDocument } from './entities/event.entity';
+import { EventSponsorDocument } from './entities/event-sponsor.entity';
 
 @Injectable()
 export class SponsorInvitationsService {
@@ -46,7 +50,7 @@ export class SponsorInvitationsService {
     private personsService: PersonsService,
     @Inject(forwardRef(() => TicketsService))
     private ticketsService: TicketsService,
-  ) { }
+  ) {}
 
   private async generateUniqueCode(): Promise<string> {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -65,8 +69,10 @@ export class SponsorInvitationsService {
     return code!;
   }
 
-  private async getCheapestTicket(eventId: string): Promise<string> {
-    // Obtener todos los tickets del evento
+  private async findBestTicketTypeForInvitation(
+    eventId: string,
+    participantType: ParticipantType,
+  ): Promise<string> {
     const tickets = await this.ticketTypeModel
       .find({ eventId: new Types.ObjectId(eventId) })
       .exec();
@@ -77,11 +83,42 @@ export class SponsorInvitationsService {
       );
     }
 
-    // TODO: Implementar conversión de moneda usando rates del evento
-    // Por ahora, ordenar por precio y asumir que todos están en la misma moneda
-    // o que los precios ya están normalizados
-    const cheapestTicket = tickets.sort((a, b) => a.price - b.price)[0];
+    // 1. Intentar buscar por targetRole (Nuevo sistema de tickets exclusivos)
+    const systemTicket = tickets.find((t) => t.targetRole === participantType);
+    if (systemTicket) {
+      return (systemTicket._id as Types.ObjectId).toString();
+    }
 
+    // Fallback: Lógica antigua para compatibilidad o eventos antiguos
+    // 2. Buscar tickets gratuitos (precio 0)
+    const freeTickets = tickets.filter((t) => t.price === 0);
+
+    if (freeTickets.length > 0) {
+      // 3. Intentar coincidir por nombre según el tipo de participante
+      let regex: RegExp | null = null;
+
+      if (
+        participantType === ParticipantType.STAFF ||
+        participantType === ParticipantType.OPERATIONAL_STAFF
+      ) {
+        regex = /staff|organizador|equipo|operativo/i;
+      } else if (participantType === ParticipantType.GUEST) {
+        regex = /invitado|guest|cortesía|vip/i;
+      } else if (participantType === ParticipantType.SCHOLARSHIP) {
+        regex = /beca|scholarship|estudiante/i;
+      }
+
+      if (regex) {
+        const matched = freeTickets.find((t) => regex!.test(t.name));
+        if (matched) return (matched._id as Types.ObjectId).toString();
+      }
+
+      // 4. Si no hay coincidencia específica, devolver el primer gratuito
+      return (freeTickets[0]._id as Types.ObjectId).toString();
+    }
+
+    // 5. Si no hay gratuitos, devolver el más barato
+    const cheapestTicket = tickets.sort((a, b) => a.price - b.price)[0];
     return (cheapestTicket._id as Types.ObjectId).toString();
   }
 
@@ -143,26 +180,26 @@ export class SponsorInvitationsService {
       }
     }
 
-    // Solo becados (SCHOLARSHIP) tienen ticket
-    let ticketTypeId: string | null = null;
-    if (createDto.participantType === ParticipantType.SCHOLARSHIP) {
-      ticketTypeId = createDto.ticketTypeId || null;
+    // Vincular siempre un ticket a la invitación
+    let ticketTypeId: string | null = createDto.ticketTypeId || null;
 
-      if (!ticketTypeId) {
-        // Obtener el ticket más barato
-        ticketTypeId = await this.getCheapestTicket(eventId.toString());
-      } else {
-        // Validar que el ticket existe y pertenece al evento
-        const ticketExists = await this.ticketTypeModel.exists({
-          _id: new Types.ObjectId(ticketTypeId),
-          eventId: eventId,
-        });
+    if (!ticketTypeId) {
+      // Buscar el mejor ticket disponible (incluyendo tickets de sistema por rol)
+      ticketTypeId = await this.findBestTicketTypeForInvitation(
+        eventId.toString(),
+        createDto.participantType,
+      );
+    } else {
+      // Validar que el ticket existe y pertenece al evento
+      const ticketExists = await this.ticketTypeModel.exists({
+        _id: new Types.ObjectId(ticketTypeId),
+        eventId: eventId,
+      });
 
-        if (!ticketExists) {
-          throw new BadRequestException(
-            'El ticket especificado no pertenece a este evento',
-          );
-        }
+      if (!ticketExists) {
+        throw new BadRequestException(
+          'El ticket especificado no pertenece a este evento',
+        );
       }
     }
 
@@ -173,7 +210,7 @@ export class SponsorInvitationsService {
       eventId: eventId,
       code,
       participantType: createDto.participantType,
-      ticketTypeId: ticketTypeId ? new Types.ObjectId(ticketTypeId) : null,
+      ticketTypeId: new Types.ObjectId(ticketTypeId), // Siempre habrá un ticket
       usageType: createDto.usageType,
       maxUses:
         createDto.usageType === InvitationUsageType.MULTIPLE
@@ -193,6 +230,122 @@ export class SponsorInvitationsService {
       .exec();
 
     return toDto(populated!, SponsorInvitationDto);
+  }
+
+  async createBulkInvitations(
+    eventSponsorId: string,
+    createDto: CreateBulkInvitationsDto,
+    createdBy: string,
+  ): Promise<BulkInvitationsResponseDto> {
+    let sponsor: EventSponsorDocument | null = null;
+    let eventId: Types.ObjectId;
+    let sponsorIdToSave: Types.ObjectId | null = null;
+
+    if (createDto.participantType === ParticipantType.OPERATIONAL_STAFF) {
+      eventId = new Types.ObjectId(eventSponsorId);
+
+      const event = await this.eventModel.findById(eventId);
+      if (!event) {
+        throw new NotFoundException('Evento no encontrado');
+      }
+
+      sponsorIdToSave = event.companyId;
+    } else {
+      sponsor = await this.eventSponsorsService.findBySponsorId(eventSponsorId);
+
+      if (!sponsor) {
+        throw new NotFoundException('Sponsor not found');
+      }
+
+      if (!sponsor.isActive) {
+        throw new BadRequestException('Sponsor is not active');
+      }
+
+      eventId = sponsor.eventId;
+      sponsorIdToSave = new Types.ObjectId(eventSponsorId);
+
+      const availableQuota = this.getAvailableQuota(
+        sponsor,
+        createDto.participantType,
+      );
+
+      if (availableQuota < createDto.quantity) {
+        throw new BadRequestException(
+          `Solo hay ${availableQuota} espacios disponibles, no se pueden crear ${createDto.quantity} invitaciones`,
+        );
+      }
+    }
+
+    let ticketTypeId: string | null = createDto.ticketTypeId || null;
+
+    if (!ticketTypeId) {
+      ticketTypeId = await this.findBestTicketTypeForInvitation(
+        eventId.toString(),
+        createDto.participantType,
+      );
+    } else {
+      const ticketExists = await this.ticketTypeModel.exists({
+        _id: new Types.ObjectId(ticketTypeId),
+        eventId: eventId,
+      });
+
+      if (!ticketExists) {
+        throw new BadRequestException(
+          'El ticket especificado no pertenece a este evento',
+        );
+      }
+    }
+
+    const codes = await Promise.all(
+      Array.from({ length: createDto.quantity }, () =>
+        this.generateUniqueCode(),
+      ),
+    );
+
+    const invitationsToCreate = codes.map((code) => ({
+      eventSponsorId: sponsorIdToSave,
+      eventId: eventId,
+      code,
+      participantType: createDto.participantType,
+      ticketTypeId: new Types.ObjectId(ticketTypeId!),
+      usageType: InvitationUsageType.SINGLE,
+      maxUses: null,
+      currentUses: 0,
+      expiresAt: createDto.expiresAt ? new Date(createDto.expiresAt) : null,
+      isActive: true,
+      createdBy: new Types.ObjectId(createdBy),
+      uses: [],
+    }));
+
+    const created = await this.invitationModel.insertMany(invitationsToCreate);
+
+    const populatedInvitations = await this.invitationModel
+      .find({ _id: { $in: created.map((inv) => inv._id) } })
+      .populate('ticketType')
+      .exec();
+
+    const remainingQuota =
+      createDto.participantType !== ParticipantType.OPERATIONAL_STAFF && sponsor
+        ? this.getAvailableQuota(sponsor, createDto.participantType) -
+          createDto.quantity
+        : 0;
+
+    const totalQuota =
+      createDto.participantType !== ParticipantType.OPERATIONAL_STAFF && sponsor
+        ? this.getAvailableQuota(sponsor, createDto.participantType)
+        : 0;
+
+    return {
+      success: true,
+      created: created.length,
+      invitations: populatedInvitations.map((inv) =>
+        toDto(inv, SponsorInvitationDto),
+      ),
+      limits: {
+        remaining: remainingQuota,
+        total: totalQuota + createDto.quantity,
+      },
+    };
   }
 
   private getAvailableQuota(
@@ -310,6 +463,10 @@ export class SponsorInvitationsService {
       .populate({
         path: 'eventSponsor',
         populate: { path: 'company' },
+      })
+      .populate({
+        path: 'uses',
+        populate: { path: 'userId', populate: { path: 'person' } },
       })
       .sort(sortObject)
       .skip(skip)
@@ -548,7 +705,6 @@ export class SponsorInvitationsService {
       }
     }
 
-    // Verificar que el usuario no esté ya registrado
     const existing =
       await this.eventParticipantsService.getParticipantByUserAndEvent(
         userId,
@@ -559,7 +715,6 @@ export class SponsorInvitationsService {
       throw new ConflictException('Ya estás registrado en este evento');
     }
 
-    // Registrar participante
     const participant = await this.eventParticipantsService.registerParticipant(
       invitation.eventId.toString(),
       {
@@ -569,16 +724,29 @@ export class SponsorInvitationsService {
       },
     );
 
-    // Generar ticket solo para becados (SCHOLARSHIP)
     let ticket: any = null;
-    if (
-      invitation.participantType === ParticipantType.SCHOLARSHIP &&
-      invitation.ticketTypeId
-    ) {
+    let ticketTypeId = invitation.ticketTypeId;
+
+    if (!ticketTypeId) {
+      try {
+        const cheapestId = await this.findBestTicketTypeForInvitation(
+          invitation.eventId.toString(),
+          invitation.participantType,
+        );
+        ticketTypeId = new Types.ObjectId(cheapestId);
+      } catch (error) {
+        console.warn(
+          'No se pudo encontrar un tipo de ticket para la invitación',
+          error,
+        );
+      }
+    }
+
+    if (ticketTypeId) {
       ticket = await this.ticketsService.generateTicketForInvitation({
         userId,
         eventId: invitation.eventId.toString(),
-        ticketTypeId: invitation.ticketTypeId.toString(),
+        ticketTypeId: ticketTypeId.toString(),
         participantId: participant.id,
         participantType: invitation.participantType,
       });
@@ -597,9 +765,9 @@ export class SponsorInvitationsService {
       participant,
       ticket: ticket
         ? {
-          ticketNumber: ticket.ticketNumber,
-          ticketType: ticket.ticketTypeName,
-        }
+            ticketNumber: ticket.ticketNumber,
+            ticketType: ticket.ticketTypeName,
+          }
         : null,
       message: '¡Bienvenido al evento! Tu registro ha sido confirmado.',
     };
@@ -617,7 +785,6 @@ export class SponsorInvitationsService {
       throw new NotFoundException('Código de invitación no válido');
     }
 
-    // Validar estado de la invitación
     this.validateInvitationStatus(invitation);
 
     // Solo validar cuota si NO es OPERATIONAL_STAFF
@@ -667,16 +834,30 @@ export class SponsorInvitationsService {
       },
     );
 
-    // Generar ticket solo para becados (SCHOLARSHIP)
+    // Generar ticket para todos
     let ticket: any = null;
-    if (
-      invitation.participantType === ParticipantType.SCHOLARSHIP &&
-      invitation.ticketTypeId
-    ) {
+    let ticketTypeId = invitation.ticketTypeId;
+
+    if (!ticketTypeId) {
+      try {
+        const cheapestId = await this.findBestTicketTypeForInvitation(
+          invitation.eventId.toString(),
+          invitation.participantType,
+        );
+        ticketTypeId = new Types.ObjectId(cheapestId);
+      } catch (error) {
+        console.warn(
+          'No se pudo encontrar un tipo de ticket para la invitación',
+          error,
+        );
+      }
+    }
+
+    if (ticketTypeId) {
       ticket = await this.ticketsService.generateTicketForInvitation({
         userId,
         eventId: invitation.eventId.toString(),
-        ticketTypeId: invitation.ticketTypeId.toString(),
+        ticketTypeId: ticketTypeId.toString(),
         participantId: participant.id,
         participantType: invitation.participantType,
       });
@@ -696,9 +877,9 @@ export class SponsorInvitationsService {
       participant,
       ticket: ticket
         ? {
-          ticketNumber: ticket.ticketNumber,
-          ticketType: ticket.ticketTypeName,
-        }
+            ticketNumber: ticket.ticketNumber,
+            ticketType: ticket.ticketTypeName,
+          }
         : null,
       userId: userId,
       message:
@@ -750,5 +931,30 @@ export class SponsorInvitationsService {
     }
 
     await invitation.save();
+  }
+
+  async acceptInvitationForUser(
+    code: string,
+    acceptDto: AcceptInvitationForUserDto,
+  ): Promise<{
+    user: { id: string; email: string; fullName: string };
+    message: string;
+  }> {
+    const user = await this.usersService.findOne(acceptDto.userId);
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    await this.acceptInvitationWithAuth(code, user.id);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.person?.fullName ?? '',
+      },
+      message: 'Usuario registrado en el evento exitosamente',
+    };
   }
 }

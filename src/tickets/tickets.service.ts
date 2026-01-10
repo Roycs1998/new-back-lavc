@@ -16,6 +16,7 @@ import {
 import { UsersService } from '../users/users.service';
 import { ParticipantType } from '../common/enums/participant-type.enum';
 import { TicketLifecycleStatus } from '../common/enums/ticket-lifecycle-status.enum';
+import { QRService } from '../qr/qr.service';
 
 @Injectable()
 export class TicketsService {
@@ -26,6 +27,7 @@ export class TicketsService {
     private ordersService: OrdersService,
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
+    private qrService: QRService,
   ) {}
 
   async generateTicketsForOrder(orderId: string): Promise<Ticket[]> {
@@ -50,7 +52,19 @@ export class TicketsService {
           attendeeInfo: order.customerInfo,
         });
 
-        tickets.push(await ticket.save());
+        const savedTicket = await ticket.save();
+
+        try {
+          const { qrCode, qrDataUrl } =
+            await this.qrService.generateQRForTicket(savedTicket);
+          savedTicket.qrCode = qrCode;
+          savedTicket.qrCodeImageUrl = qrDataUrl;
+          await savedTicket.save();
+        } catch (error) {
+          console.error('Error generando QR para ticket:', error);
+        }
+
+        tickets.push(savedTicket);
       }
     }
 
@@ -160,7 +174,7 @@ export class TicketsService {
       eventId: new Types.ObjectId(data.eventId),
       ticketTypeId: new Types.ObjectId(data.ticketTypeId),
       ticketTypeName: ticketType.name,
-      price: 0, // Gratis (invitación o beca)
+      price: 0,
       currency: ticketType.currency,
       status: TicketLifecycleStatus.ACTIVE,
       sourceType: 'invitation',
@@ -176,7 +190,19 @@ export class TicketsService {
       },
     });
 
-    return await ticket.save();
+    const savedTicket = await ticket.save();
+
+    try {
+      const { qrCode, qrDataUrl } =
+        await this.qrService.generateQRForTicket(savedTicket);
+      savedTicket.qrCode = qrCode;
+      savedTicket.qrCodeImageUrl = qrDataUrl;
+      await savedTicket.save();
+    } catch (error) {
+      console.error('Error generando QR para ticket:', error);
+    }
+
+    return savedTicket;
   }
 
   async cancelTicketForParticipant(participantId: string): Promise<void> {

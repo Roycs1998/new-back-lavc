@@ -37,6 +37,7 @@ import { StorageModule } from './storage/storage.module';
         uri: configService.get<string>('database.uri'),
         connectionFactory: (connection) => {
           connection.plugin(softDeletePlugin);
+
           return connection;
         },
         ...configService.get('database.options'),
@@ -56,7 +57,7 @@ import { StorageModule } from './storage/storage.module';
     AnalyticsModule,
     PaymentMethodsModule,
     EmailModule,
-    //StorageModule,
+    StorageModule,
   ],
   controllers: [],
   providers: [],

@@ -11,7 +11,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './entities/user.entity';
-import { Model, SortOrder, Types } from 'mongoose';
+import { FilterQuery, Model, SortOrder, Types } from 'mongoose';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
 import { PersonsService } from 'src/persons/persons.service';
@@ -32,7 +32,7 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @Inject(forwardRef(() => PersonsService))
     private personsService: PersonsService,
-  ) { }
+  ) {}
 
   async create(dto: CreateUserDto): Promise<UserDto> {
     if (dto.roles?.includes(UserRole.COMPANY_ADMIN) && !dto.companyId) {
@@ -126,12 +126,12 @@ export class UsersService {
     const safePage = Math.max(Number(page) || 1, 1);
     const skip = (safePage - 1) * safeLimit;
 
-    const filter: Record<string, any> = {};
+    const filter: FilterQuery<User> = {};
 
     if (entityStatus) filter.entityStatus = entityStatus;
     else filter.entityStatus = { $ne: EntityStatus.DELETED };
 
-    if (role) filter.role = role;
+    if (role) filter.roles = { $in: [role] };
     if (companyId) filter.companyId = new Types.ObjectId(companyId);
     if (typeof emailVerified === 'boolean')
       filter.emailVerified = emailVerified;
@@ -146,29 +146,29 @@ export class UsersService {
 
     const searchMatch = search?.trim()
       ? {
-        $or: [
-          { email: { $regex: escapeRegex(search.trim()), $options: 'i' } },
-          {
-            'person.firstName': {
-              $regex: escapeRegex(search.trim()),
-              $options: 'i',
+          $or: [
+            { email: { $regex: escapeRegex(search.trim()), $options: 'i' } },
+            {
+              'person.firstName': {
+                $regex: escapeRegex(search.trim()),
+                $options: 'i',
+              },
             },
-          },
-          {
-            'person.lastName': {
-              $regex: escapeRegex(search.trim()),
-              $options: 'i',
+            {
+              'person.lastName': {
+                $regex: escapeRegex(search.trim()),
+                $options: 'i',
+              },
             },
-          },
-        ],
-      }
+          ],
+        }
       : null;
 
     const SORT_WHITELIST = new Set([
       'createdAt',
       'updatedAt',
       'email',
-      'role',
+      'roles',
       'entityStatus',
       'lastLogin',
       'person.firstName',
@@ -392,7 +392,7 @@ export class UsersService {
     email: string,
     includeDeleted = false,
   ): Promise<UserDto | null> {
-    const filter: any = { email: email.trim().toLowerCase() };
+    const filter: FilterQuery<User> = { email: email.trim().toLowerCase() };
     if (!includeDeleted) filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     const user = await this.userModel

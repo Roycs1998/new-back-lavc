@@ -8,7 +8,12 @@ import {
   Delete,
   UseGuards,
   Query,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Express } from 'express';
 import { SpeakersService } from './speakers.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
@@ -18,6 +23,7 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -41,7 +47,7 @@ import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
 @ApiBearerAuth('JWT-auth')
 export class SpeakersController {
-  constructor(private readonly speakersService: SpeakersService) { }
+  constructor(private readonly speakersService: SpeakersService) {}
 
   @Post()
   @ApiOperation({ summary: 'Crear speaker y su persona en un solo paso' })
@@ -119,5 +125,41 @@ export class SpeakersController {
     @CurrentUser() currentUser: CurrentUserData,
   ) {
     return this.speakersService.softDelete(id, currentUser.id);
+  }
+
+  @Patch(':id/photo')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Actualizar foto del speaker',
+    description:
+      'Sube una nueva foto para el speaker y elimina la foto anterior si existe. La foto se almacena en la entidad Person asociada.',
+  })
+  @ApiOkResponse({ type: SpeakerDto })
+  async updatePhoto(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó archivo');
+    }
+
+    return await this.speakersService.updateSpeakerPhoto(
+      id,
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
+  }
+
+  @Delete(':id/photo')
+  @ApiOperation({
+    summary: 'Eliminar foto del speaker',
+    description:
+      'Elimina la foto del speaker del storage y remueve la referencia de la entidad Person.',
+  })
+  @ApiOkResponse({ type: SpeakerDto })
+  async deletePhoto(@Param('id', ParseObjectIdPipe) id: string) {
+    return await this.speakersService.deleteSpeakerPhoto(id);
   }
 }

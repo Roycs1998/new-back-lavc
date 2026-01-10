@@ -82,6 +82,13 @@ export class CompanyDto {
   description?: string;
 
   @ApiPropertyOptional({
+    description: 'URL del logo de la empresa',
+    example: 'https://cdn.ejemplo.com/upload/companies/123456-uuid-logo.png',
+  })
+  @Expose()
+  logo?: string;
+
+  @ApiPropertyOptional({
     description: 'Nombre de contacto',
     example: 'María Pérez',
   })

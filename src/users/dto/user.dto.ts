@@ -9,6 +9,7 @@ class ShortCompanyDto {
     example: '64f14b1a2c4e5a1234567891',
   })
   @Expose()
+  @Transform(({ obj }) => obj._id?.toString())
   id: string;
 
   @ApiProperty({
@@ -33,7 +34,7 @@ class ShortCompanyDto {
   contactPhone?: string;
 }
 
-class ShortPersonDto {
+export class ShortPersonDto {
   @ApiProperty({
     description: 'ID único de la persona',
     example: '64f14b1a2c4e5a1234567890',
@@ -77,6 +78,7 @@ export class UserDto {
     example: '64f14b1a2c4e5a1234567890',
   })
   @Expose()
+  @Transform(({ obj }) => obj._id?.toString())
   id: string;
 
   @ApiProperty({

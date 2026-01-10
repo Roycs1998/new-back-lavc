@@ -28,7 +28,10 @@ import { SponsorInvitationsService } from './sponsor-invitations.service';
 import { CreateSponsorInvitationDto } from './dto/create-sponsor-invitation.dto';
 import { UpdateSponsorInvitationDto } from './dto/update-sponsor-invitation.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
+import { AcceptInvitationForUserDto } from './dto/accept-invitation-for-user.dto';
 import { SponsorInvitationDto } from './dto/sponsor-invitation.dto';
+import { CreateBulkInvitationsDto } from './dto/create-bulk-invitations.dto';
+import { BulkInvitationsResponseDto } from './dto/bulk-invitations-response.dto';
 import { ListInvitationsQueryDto } from './dto/list-invitations-query.dto';
 import { PaginatedInvitationsDto } from './dto/paginated-invitations.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -45,7 +48,7 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class EventInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) { }
+  constructor(private readonly invitationsService: SponsorInvitationsService) {}
 
   @Get()
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
@@ -83,9 +86,10 @@ export class EventInvitationsController {
 @ApiTags('Invitaciones de Sponsors')
 @Controller('events/:eventId/sponsors/:sponsorId/invitations')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
 @ApiBearerAuth('JWT-auth')
 export class SponsorInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) { }
+  constructor(private readonly invitationsService: SponsorInvitationsService) {}
 
   @Post()
   @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
@@ -117,6 +121,38 @@ export class SponsorInvitationsController {
     @CurrentUser() currentUser: CurrentUserData,
   ) {
     return await this.invitationsService.createInvitation(
+      sponsorId,
+      createDto,
+      currentUser.id,
+    );
+  }
+
+  @Post('bulk')
+  @ApiOperation({
+    summary: 'Crear múltiples invitaciones',
+    description:
+      'Genera múltiples códigos únicos de invitación de uso único para el mismo evento y sponsor',
+  })
+  @ApiParam({
+    name: 'eventId',
+    description: 'ID del evento',
+    example: '66c0da2b6a3aa6ed3c63e001',
+  })
+  @ApiParam({
+    name: 'sponsorId',
+    description: 'ID del patrocinador',
+    example: '66c0da2b6a3aa6ed3c63e004',
+  })
+  @ApiCreatedResponse({
+    type: BulkInvitationsResponseDto,
+    description: 'Invitaciones creadas exitosamente',
+  })
+  async createBulkInvitations(
+    @Param('sponsorId', ParseObjectIdPipe) sponsorId: string,
+    @Body() createDto: CreateBulkInvitationsDto,
+    @CurrentUser() currentUser: CurrentUserData,
+  ) {
+    return await this.invitationsService.createBulkInvitations(
       sponsorId,
       createDto,
       currentUser.id,
@@ -259,7 +295,7 @@ export class SponsorInvitationsController {
 @ApiTags('Invitaciones Públicas')
 @Controller('invitations')
 export class PublicInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) { }
+  constructor(private readonly invitationsService: SponsorInvitationsService) {}
 
   @Get(':code/validate')
   @Public()
@@ -297,12 +333,6 @@ export class PublicInvitationsController {
   @ApiCreatedResponse({
     description: 'Invitación aceptada y usuario registrado exitosamente',
   })
-  @ApiBadRequestResponse({
-    description: 'Invitación inválida, expirada o sin usos disponibles',
-  })
-  @ApiConflictResponse({
-    description: 'El usuario ya está registrado en este evento',
-  })
   async acceptInvitation(
     @Param('code') code: string,
     @Body() acceptDto: AcceptInvitationDto,
@@ -327,6 +357,33 @@ export class PublicInvitationsController {
     }
 
     return await this.invitationsService.acceptInvitationWithSignup(
+      code,
+      acceptDto,
+    );
+  }
+
+  @Post(':code/accept-for-user')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Aceptar invitación en nombre de un usuario (Admin)',
+    description:
+      'Permite a un administrador registrar a un usuario existente en un evento usando su ID y un código de invitación.',
+  })
+  @ApiParam({
+    name: 'code',
+    description: 'Código de invitación',
+    example: 'ACME2025-XYZ789',
+  })
+  @ApiCreatedResponse({
+    description: 'Usuario registrado en el evento exitosamente',
+  })
+  async acceptInvitationForUser(
+    @Param('code') code: string,
+    @Body() acceptDto: AcceptInvitationForUserDto,
+  ) {
+    return await this.invitationsService.acceptInvitationForUser(
       code,
       acceptDto,
     );

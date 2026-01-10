@@ -21,6 +21,7 @@ import {
 } from 'mongoose';
 import { PersonsService } from 'src/persons/persons.service';
 import { CompaniesService } from 'src/companies/companies.service';
+import { StorageService } from 'src/storage/storage.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { CreateSpeakerWithPersonDto } from 'src/persons/dto/create-speaker-with-person.dto';
 import { SpeakerFilterDto } from './dto/speaker-filter.dto';
@@ -30,6 +31,7 @@ import { sanitizeDefined } from 'src/utils/sanitizeDefined';
 import { SpeakerDto } from './dto/speaker.dto';
 import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 import { toDto } from 'src/utils/toDto';
+import { extractKeyFromUrl } from 'src/utils/extractKeyFromUrl';
 
 @Injectable()
 export class SpeakersService {
@@ -39,6 +41,7 @@ export class SpeakersService {
     private personsService: PersonsService,
     @Inject(forwardRef(() => CompaniesService))
     private companiesService: CompaniesService,
+    private storageService: StorageService,
   ) {}
 
   private escapeRegex(input: string): string {
@@ -325,5 +328,88 @@ export class SpeakersService {
 
   async softDelete(id: string, deletedBy?: string): Promise<SpeakerDto> {
     return this.changeStatus(id, EntityStatus.DELETED, deletedBy);
+  }
+
+  async updateSpeakerPhoto(
+    id: string,
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ): Promise<SpeakerDto> {
+    const speakerDoc = await this.speakerModel
+      .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
+      .populate('person')
+      .exec();
+
+    if (!speakerDoc) {
+      throw new NotFoundException(`No se encontró el orador con ID ${id}`);
+    }
+
+    if (!speakerDoc.personId) {
+      throw new BadRequestException('El speaker no tiene una persona asociada');
+    }
+
+    const speaker = toDto(speakerDoc, SpeakerDto);
+    const oldAvatarUrl = speaker.person.avatar;
+
+    const fileInfo = await this.storageService.uploadSpeakerPhoto(
+      buffer,
+      originalName,
+      mimeType,
+    );
+
+    await this.personsService.update(speakerDoc.personId.toString(), {
+      avatar: fileInfo.publicUrl,
+    });
+
+    if (oldAvatarUrl && oldAvatarUrl !== fileInfo.publicUrl) {
+      const oldKey = extractKeyFromUrl(oldAvatarUrl);
+      if (oldKey) {
+        try {
+          await this.storageService.deleteFile(oldKey);
+        } catch (error) {
+          console.error(`Failed to delete old avatar: ${oldKey}`, error);
+        }
+      }
+    }
+
+    return this.findOne(id);
+  }
+
+  async deleteSpeakerPhoto(id: string): Promise<SpeakerDto> {
+    const speakerDoc = await this.speakerModel
+      .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
+      .populate('person')
+      .exec();
+
+    if (!speakerDoc) {
+      throw new NotFoundException(`No se encontró el orador con ID ${id}`);
+    }
+
+    if (!speakerDoc.personId) {
+      throw new BadRequestException('El speaker no tiene una persona asociada');
+    }
+
+    const speaker = toDto(speakerDoc, SpeakerDto);
+    const avatarUrl = speaker.person?.avatar;
+
+    if (!avatarUrl) {
+      throw new BadRequestException('El speaker no tiene una foto asignada');
+    }
+
+    const avatarKey = extractKeyFromUrl(avatarUrl);
+    if (avatarKey) {
+      try {
+        await this.storageService.deleteFile(avatarKey);
+      } catch (error) {
+        console.error(`Failed to delete avatar: ${avatarKey}`, error);
+      }
+    }
+
+    await this.personsService.update(speakerDoc.personId.toString(), {
+      avatar: undefined,
+    });
+
+    return this.findOne(id);
   }
 }

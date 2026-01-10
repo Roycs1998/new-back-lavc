@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { TicketStatus } from 'src/common/enums/ticket-status.enum';
 import { Currency } from 'src/common/enums/currency.enum';
+import { ParticipantType } from 'src/common/enums/participant-type.enum';
 
 export type TicketTypeDocument = TicketType & Document;
 
@@ -97,6 +98,12 @@ export class TicketType {
     default: TicketStatus.AVAILABLE,
   })
   ticketStatus!: TicketStatus;
+
+  @Prop({ type: Boolean, default: false })
+  isSystem!: boolean; // Indica si es un ticket generado por el sistema
+
+  @Prop({ type: String, enum: ParticipantType, required: false })
+  targetRole?: ParticipantType; // Rol al que está dirigido este ticket
 
   @Prop({ type: Date })
   saleStartDate?: Date;

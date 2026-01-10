@@ -6,16 +6,20 @@ import {
   Patch,
   Param,
   Delete,
-  HttpCode,
-  HttpStatus,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Express } from 'express';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -35,13 +39,12 @@ import { ChangeCompanyStatusDto } from './dto/change-company-status.dto';
 @ApiTags('Empresas')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
 @Controller('companies')
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({ summary: 'Crear una empresa' })
   @ApiResponse({
     status: 201,
@@ -64,7 +67,6 @@ export class CompaniesController {
   }
 
   @Get(':id')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Obtener una empresa por ID' })
   @ApiResponse({
     status: 200,
@@ -76,7 +78,6 @@ export class CompaniesController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Actualizar una empresa por ID' })
   @ApiResponse({
     status: 200,
@@ -91,7 +92,6 @@ export class CompaniesController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({
     summary: 'Cambiar estado de una empresa (ACTIVE/INACTIVE/DELETED)',
   })
@@ -113,8 +113,6 @@ export class CompaniesController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({ summary: 'Eliminar lógicamente una empresa por ID' })
   @ApiResponse({
     status: 204,
@@ -125,5 +123,33 @@ export class CompaniesController {
     @CurrentUser() currentUser: CurrentUserData,
   ): Promise<void> {
     await this.companiesService.softDelete(id, currentUser?.id);
+  }
+
+  @Patch(':id/logo')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Actualizar logo de la empresa' })
+  @ApiResponse({ status: 200, type: CompanyDto })
+  async updateLogo(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó archivo');
+    }
+
+    return await this.companiesService.updateCompanyLogo(
+      id,
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
+  }
+
+  @Delete(':id/logo')
+  @ApiOperation({ summary: 'Eliminar logo de la empresa' })
+  @ApiResponse({ status: 200, type: CompanyDto })
+  async deleteLogo(@Param('id', ParseObjectIdPipe) id: string) {
+    return await this.companiesService.deleteCompanyLogo(id);
   }
 }

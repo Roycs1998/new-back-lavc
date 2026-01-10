@@ -81,7 +81,7 @@ export class Ticket {
   })
   attendeeInfo: AttendeeInfo;
 
-  @Prop({ unique: true, index: true })
+  @Prop({ unique: true, sparse: true })
   qrCode?: string;
 
   @Prop()

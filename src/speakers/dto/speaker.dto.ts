@@ -76,6 +76,13 @@ class ShortPersonDto {
   })
   @Expose()
   email?: string;
+
+  @ApiPropertyOptional({
+    description: 'URL del avatar/foto de la persona',
+    example: 'https://cdn.ejemplo.com/upload/speakers/123456-uuid-photo.jpg',
+  })
+  @Expose()
+  avatar?: string;
 }
 
 class SocialMediaViewDto {
@@ -95,6 +102,7 @@ class SocialMediaViewDto {
   @Expose()
   github?: string;
 }
+
 class AudienceSizeViewDto {
   @ApiPropertyOptional({ example: 50 })
   @Expose()

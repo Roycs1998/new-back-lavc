@@ -6,6 +6,7 @@ import { Speaker, SpeakerSchema } from './entities/speaker.entity';
 import { PersonsModule } from 'src/persons/persons.module';
 import { CompaniesModule } from 'src/companies/companies.module';
 import { UsersModule } from 'src/users/users.module';
+import { StorageModule } from 'src/storage/storage.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UsersModule } from 'src/users/users.module';
     forwardRef(() => PersonsModule),
     forwardRef(() => CompaniesModule),
     forwardRef(() => UsersModule),
+    StorageModule,
   ],
   controllers: [SpeakersController],
   providers: [SpeakersService],

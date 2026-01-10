@@ -257,13 +257,33 @@ export class QRService {
     };
   }
 
-  /* HELPERS */
+  async generateQRForTicket(
+    ticket: any,
+  ): Promise<{ qrCode: string; qrDataUrl: string }> {
+    const qrData = this.createQRData(ticket);
+    const qrCode = this.signQRData(qrData);
+
+    const qrDataUrl = await QRCode.toDataURL(qrCode, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+    });
+
+    return { qrCode, qrDataUrl };
+  }
 
   private createQRData(ticket: any): any {
     return {
       ticketId: ticket._id.toString(),
-      eventId: ticket.eventId._id.toString(),
-      userId: ticket.userId._id.toString(),
+      eventId: ticket.eventId._id
+        ? ticket.eventId._id.toString()
+        : ticket.eventId.toString(),
+      userId: ticket.userId._id
+        ? ticket.userId._id.toString()
+        : ticket.userId.toString(),
       ticketNumber: ticket.ticketNumber,
       price: ticket.price,
       createdAt: ticket.createdAt,

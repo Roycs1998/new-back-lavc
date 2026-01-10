@@ -6,6 +6,7 @@ import { Ticket, TicketSchema } from './entities/ticket.entity';
 import { OrdersModule } from '../orders/orders.module';
 import { EventsModule } from '../events/events.module';
 import { UsersModule } from '../users/users.module';
+import { QRModule } from '../qr/qr.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UsersModule } from '../users/users.module';
     forwardRef(() => OrdersModule),
     forwardRef(() => EventsModule),
     forwardRef(() => UsersModule),
+    QRModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService],

@@ -36,6 +36,8 @@ import { EventStatsDto } from './dto/event-stats.dto';
 import { CompanyEventStatsDto } from './dto/company-event-stats.dto';
 import { TicketTypeDto } from './dto/ticket-type.dto';
 import { UpdateTicketTypeDto } from './dto/update-ticket-type.dto';
+import { ParticipantType } from 'src/common/enums/participant-type.enum';
+import { Currency } from 'src/common/enums/currency.enum';
 
 type SortDir = 1 | -1;
 
@@ -58,7 +60,7 @@ export class EventsService {
     private readonly ticketTypeModel: Model<TicketTypeDocument>,
     @Inject(forwardRef(() => CompaniesService))
     private readonly companiesService: CompaniesService,
-  ) { }
+  ) {}
 
   private async generateUniqueSlug(title: string): Promise<string> {
     const baseSlug = title
@@ -177,7 +179,54 @@ export class EventsService {
       );
     }
 
+    // Generar tickets de sistema por defecto
+    await this.createDefaultSystemTickets(
+      (created as any)._id.toString(),
+      createdBy,
+    );
+
     return toDto(doc, EventDto);
+  }
+
+  private async createDefaultSystemTickets(eventId: string, createdBy: string) {
+    const systemTickets = [
+      {
+        name: 'Acceso de Staff',
+        description: 'Acceso para Staff Operativo',
+        price: 0,
+        quantity: 9999,
+        targetRole: ParticipantType.OPERATIONAL_STAFF,
+      },
+      {
+        name: 'Accesso de Expositores',
+        description: 'Acceso para Expositores (Staff)',
+        price: 0,
+        quantity: 9999,
+        targetRole: ParticipantType.STAFF, // Expositores en el backend son STAFF
+      },
+      {
+        name: 'Acceso de Invitados',
+        description: 'Acceso para Invitados',
+        price: 0,
+        quantity: 9999,
+        targetRole: ParticipantType.GUEST,
+      },
+    ];
+
+    for (const ticket of systemTickets) {
+      await this.ticketTypeModel.create({
+        eventId: new Types.ObjectId(eventId),
+        name: ticket.name,
+        description: ticket.description,
+        price: ticket.price,
+        quantity: ticket.quantity,
+        currency: Currency.PEN,
+        ticketStatus: TicketStatus.AVAILABLE,
+        isSystem: true,
+        targetRole: ticket.targetRole,
+        createdBy: new Types.ObjectId(createdBy),
+      });
+    }
   }
 
   private buildEventStatusFilters(
@@ -186,11 +235,9 @@ export class EventsService {
   ): FilterQuery<Event> {
     const filters: FilterQuery<Event> = {};
 
-    // Si se especifica un eventStatus explícito en los filtros
     if (eventStatus) {
       filters.eventStatus = eventStatus;
 
-      // Solo incluir eventos no eliminados (soft delete) excepto si se buscan DELETED
       if (eventStatus !== EventStatus.DELETED) {
         filters.$and = [
           {
@@ -547,10 +594,7 @@ export class EventsService {
       .populate('company')
       .populate({
         path: 'speakers',
-        populate: [
-          { path: 'personId' },
-          { path: 'companyId' },
-        ],
+        populate: [{ path: 'personId' }, { path: 'companyId' }],
       })
       .exec();
     console.log(event);
@@ -945,6 +989,7 @@ export class EventsService {
     const docs = await this.ticketTypeModel
       .find({
         eventId: new Types.ObjectId(eventId),
+        price: { $gt: 0 },
       })
       .sort({ createdAt: 1 })
       .exec();
