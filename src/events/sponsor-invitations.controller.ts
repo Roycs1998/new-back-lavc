@@ -364,7 +364,7 @@ export class PublicInvitationsController {
 
   @Post(':code/accept-for-user')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Aceptar invitación en nombre de un usuario (Admin)',

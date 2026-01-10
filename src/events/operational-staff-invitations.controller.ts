@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Param,
-  UseGuards
-} from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -29,10 +23,10 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class OperationalStaffInvitationsController {
-  constructor(private readonly invitationsService: SponsorInvitationsService) { }
+  constructor(private readonly invitationsService: SponsorInvitationsService) {}
 
   @Post()
-  @Roles(UserRole.PLATFORM_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Crear invitación para staff operativo (solo PLATFORM_ADMIN)',
     description:

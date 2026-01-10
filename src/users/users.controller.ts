@@ -39,7 +39,7 @@ import { UserPaginatedDto } from './dto/user-pagination.dto';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -77,7 +77,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Obtener todos los usuarios (con filtros y paginación)',
   })
