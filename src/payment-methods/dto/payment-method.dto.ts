@@ -55,6 +55,27 @@ export class PaymentMethodSettingsResponseDto {
   maxVoucherSize: number;
 }
 
+// ⭐ DTO for Culqi Config (ONLY PUBLIC DATA - NO SECRET KEY)
+export class CulqiConfigResponseDto {
+  @ApiProperty({ description: 'Culqi public key for frontend' })
+  @Expose()
+  publicKey: string;
+
+  @ApiProperty({ description: 'Is live mode (production)' })
+  @Expose()
+  isLiveMode: boolean;
+
+  @ApiProperty({ description: 'Enabled payment methods' })
+  @Expose()
+  enabledMethods: string[];
+
+  @ApiProperty({ description: 'Commission rate' })
+  @Expose()
+  commissionRate: number;
+
+  // ⚠️ IMPORTANT: secretKey is NOT exposed for security
+}
+
 export class PaymentMethodDto {
   @ApiProperty()
   @Expose()
@@ -80,6 +101,11 @@ export class PaymentMethodDto {
   @Expose()
   @Type(() => BankAccountInfoResponseDto)
   bankAccount?: BankAccountInfoResponseDto;
+
+  @ApiPropertyOptional({ type: CulqiConfigResponseDto })
+  @Expose()
+  @Type(() => CulqiConfigResponseDto)
+  culqiConfig?: CulqiConfigResponseDto;
 
   @ApiProperty({ type: PaymentMethodSettingsResponseDto })
   @Expose()

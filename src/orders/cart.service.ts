@@ -87,6 +87,7 @@ export class CartService {
       })
       .populate({
         path: 'ticketType',
+        select: 'id name description price currency restrictions',
       })
       .sort({ createdAt: -1 })
       .exec();

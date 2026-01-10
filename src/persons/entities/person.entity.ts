@@ -29,6 +29,9 @@ export class Person {
   @Prop({ type: Date })
   dateOfBirth?: Date;
 
+  @Prop({ type: String })
+  avatar?: string;
+
   @Prop({
     type: String,
     enum: PersonType,

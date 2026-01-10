@@ -18,7 +18,7 @@ export class OrdersService {
   constructor(
     @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
     private cartService: CartService,
-  ) {}
+  ) { }
 
   async createOrderFromCart(
     userId: string,
@@ -77,13 +77,10 @@ export class OrdersService {
     let subtotal = 0;
 
     const orderItems = cartItems.map((item) => {
-      const ticketType =
-        item.ticketTypeId && typeof item.ticketTypeId === 'object'
-          ? item.ticketTypeId
-          : {};
-      const ticketTypeId =
-        ticketType?._id?.toString?.() ?? item.ticketTypeId?.toString?.();
-      const ticketTypeName = ticketType?.name ?? item.ticketTypeName;
+      // ⭐ FIX: En CartItemDto, ticketType es un objeto con { id, name, ... }
+      // No es una referencia de MongoDB como en el documento raw
+      const ticketTypeId = item.ticketType?.id;
+      const ticketTypeName = item.ticketType?.name;
 
       if (!ticketTypeId || !ticketTypeName) {
         throw new BadRequestException(

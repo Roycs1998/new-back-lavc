@@ -552,12 +552,13 @@ export class EventsService {
       .populate('company')
       .populate({
         path: 'speakers',
-        populate: {
-          path: 'person',
-        },
+        populate: [
+          { path: 'personId' },
+          { path: 'companyId' },
+        ],
       })
       .exec();
-
+    console.log(event);
     if (!event) {
       throw new NotFoundException(`No se encontró el evento con slug '${slug}`);
     }

@@ -78,7 +78,37 @@ class ShortSpeakerDto {
   })
   @Expose()
   @Type(() => ShortPersonDto)
-  person: ShortPersonDto;
+  @Transform(({ obj }) => obj.personId)
+  person?: ShortPersonDto;
+
+  @ApiPropertyOptional({ example: 'Biografía del orador' })
+  @Expose()
+  biography?: string;
+
+  @ApiPropertyOptional({
+    description: 'Empresa asociada al orador',
+    type: () => ShortCompanyDto,
+  })
+  @Expose()
+  @Type(() => ShortCompanyDto)
+  @Transform(({ obj }) => obj.companyId)
+  company?: ShortCompanyDto;
+
+  @ApiPropertyOptional({ example: 'Inteligencia Artificial' })
+  @Expose()
+  specialty?: string;
+
+  @ApiPropertyOptional({ example: 10 })
+  @Expose()
+  yearsExperience?: number;
+
+  @ApiPropertyOptional({ type: [String], example: ['es', 'en'] })
+  @Expose()
+  languages?: string[];
+
+  @ApiPropertyOptional({ type: [String], example: ['AI', 'Machine Learning'] })
+  @Expose()
+  topics?: string[];
 }
 
 class EventAddressViewDto {

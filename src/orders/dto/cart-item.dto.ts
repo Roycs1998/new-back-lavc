@@ -64,6 +64,14 @@ class CartTicketTypeViewDto {
   @Expose()
   description?: string;
 
+  @ApiProperty({ example: 150.00 })
+  @Expose()
+  price!: number;
+
+  @ApiProperty({ enum: Currency, example: Currency.PEN })
+  @Expose()
+  currency!: Currency;
+
   @ApiProperty({ type: TicketRestrictionsViewDto })
   @Type(() => TicketRestrictionsViewDto)
   @Expose()

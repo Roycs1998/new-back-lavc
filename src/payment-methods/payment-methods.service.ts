@@ -23,7 +23,7 @@ export class PaymentMethodsService {
   constructor(
     @InjectModel(PaymentMethod.name)
     private paymentMethodModel: Model<PaymentMethodDocument>,
-  ) {}
+  ) { }
 
   async create(
     createDto: CreatePaymentMethodDto,
@@ -88,17 +88,36 @@ export class PaymentMethodsService {
       isActive: true,
     };
 
+    // Si hay companyId, buscar métodos de esa empresa O globales
     if (companyId) {
       query.$or = [{ companyId: null }, { companyId: toObjectId(companyId) }];
     } else {
+      // Si no hay companyId, solo mostrar globales
       query.companyId = null;
     }
 
-    return this.paymentMethodModel
+    const methods = await this.paymentMethodModel
       .find(query)
-      .select('-culqiConfig.secretKey')
+      .select('+culqiConfig')
       .sort({ displayOrder: 1 })
       .exec();
+
+    // ⭐ FALLBACK: Si no hay métodos para la empresa, retornar métodos globales
+    if (methods.length === 0 && companyId) {
+      this.logger.log(`No payment methods found for company ${companyId}, returning global methods`);
+
+      return this.paymentMethodModel
+        .find({
+          entityStatus: EntityStatus.ACTIVE,
+          isActive: true,
+          companyId: null, // Solo globales
+        })
+        .select('+culqiConfig')
+        .sort({ displayOrder: 1 })
+        .exec();
+    }
+
+    return methods;
   }
 
   async findOne(id: string): Promise<PaymentMethodDocument> {
@@ -172,8 +191,7 @@ export class PaymentMethodsService {
     await paymentMethod.save();
 
     this.logger.log(
-      `Payment method ${
-        paymentMethod.isActive ? 'activated' : 'deactivated'
+      `Payment method ${paymentMethod.isActive ? 'activated' : 'deactivated'
       }: ${id}`,
     );
     return paymentMethod;

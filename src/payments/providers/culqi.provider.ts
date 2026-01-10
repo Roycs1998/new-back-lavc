@@ -33,9 +33,10 @@ export class CulqiProvider implements PaymentProvider {
     metadata?: any,
   ): Promise<PaymentResult> {
     try {
-      // Convert amount to cents for Culqi
+      // ⭐ CORE LOGIC: Convert amount to cents for Culqi (mantiene lógica del proyecto anterior)
       const amountInCents = Math.round(amount * 100);
 
+      // ⭐ CORE LOGIC: Prepare charge data (estructura exacta del proyecto anterior)
       const chargeData = {
         amount: amountInCents,
         currency_code: currency,
@@ -50,6 +51,9 @@ export class CulqiProvider implements PaymentProvider {
         },
       };
 
+      this.logger.log(`Processing Culqi payment for amount: ${amountInCents} ${currency}`);
+
+      // ⭐ CORE LOGIC: Call Culqi API (mantiene la comunicación exacta)
       const response = await axios.post(`${this.apiUrl}/charges`, chargeData, {
         headers: {
           Authorization: `Bearer ${this.secretKey}`,
@@ -59,25 +63,53 @@ export class CulqiProvider implements PaymentProvider {
 
       const charge = response.data;
 
-      return {
-        success: true,
-        transactionId: charge.id,
-        providerTransactionId: charge.id,
-        amount: charge.amount / 100,
-        currency: charge.currency_code,
-        status: charge.state,
-        message: charge.state_message,
-        metadata: {
-          ...charge,
-          card: charge.source
-            ? {
-                last4: charge.source.card_number.slice(-4),
+      this.logger.log(`Culqi response received: ${JSON.stringify(charge)}`);
+
+      // ⭐ CRITICAL VALIDATION: Check for AUT0000 code (LÓGICA CORE DEL PROYECTO ANTERIOR)
+      // Este es el código que indica pago exitoso en Culqi
+      if (
+        charge.outcome?.code === 'AUT0000' &&
+        charge.outcome?.type === 'venta_exitosa'
+      ) {
+        this.logger.log('✅ Payment approved by Culqi - AUT0000 received');
+
+        return {
+          success: true,
+          transactionId: charge.id,
+          providerTransactionId: charge.id,
+          amount: charge.amount / 100,
+          currency: charge.currency_code,
+          status: 'completed',
+          message: charge.outcome.merchant_message || 'Pago exitoso',
+          metadata: {
+            ...charge,
+            outcome: charge.outcome,
+            card: charge.source
+              ? {
+                last4: charge.source.card_number?.slice(-4),
                 brand: charge.source.card_brand,
                 type: charge.source.card_type,
               }
-            : null,
-        },
-      };
+              : null,
+          },
+        };
+      } else {
+        // ⭐ VALIDACIÓN ADICIONAL: Pago no fue aprobado por Culqi
+        this.logger.warn(`Payment not approved. Outcome code: ${charge.outcome?.code}`);
+
+        return {
+          success: false,
+          transactionId: charge.id || '',
+          amount,
+          currency,
+          status: 'declined',
+          message: charge.outcome?.user_message || 'Pago no autorizado',
+          metadata: {
+            ...charge,
+            outcome: charge.outcome,
+          },
+        };
+      }
     } catch (error) {
       this.logger.error(
         'Culqi payment failed:',

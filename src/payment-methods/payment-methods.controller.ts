@@ -82,6 +82,8 @@ export class PaymentMethodsController {
       companyId,
       eventId,
     );
+
+    console.log(results);
     return results.map((r) => toDto(r, PaymentMethodDto));
   }
 
