@@ -90,11 +90,24 @@ export class SponsorInvitationsService {
     }
 
     // Fallback: Lógica antigua para compatibilidad o eventos antiguos
-    // 2. Buscar tickets gratuitos (precio 0)
+    // 2. Si es una beca (SCHOLARSHIP), buscar cualquier ticket pagado (precio > 0)
+    //    pero seleccionando el más barato de ellos.
+    if (participantType === ParticipantType.SCHOLARSHIP) {
+      const paidTickets = tickets
+        .filter((t) => t.price > 0)
+        .sort((a, b) => a.price - b.price);
+
+      if (paidTickets.length > 0) {
+        return (paidTickets[0]._id as Types.ObjectId).toString();
+      }
+      // Si no hay tickets pagados, seguirá al flujo normal y tomará uno gratuito si existe
+    }
+
+    // 3. Buscar tickets gratuitos (precio 0)
     const freeTickets = tickets.filter((t) => t.price === 0);
 
     if (freeTickets.length > 0) {
-      // 3. Intentar coincidir por nombre según el tipo de participante
+      // 4. Intentar coincidir por nombre según el tipo de participante
       let regex: RegExp | null = null;
 
       if (
@@ -113,11 +126,11 @@ export class SponsorInvitationsService {
         if (matched) return (matched._id as Types.ObjectId).toString();
       }
 
-      // 4. Si no hay coincidencia específica, devolver el primer gratuito
+      // 5. Si no hay coincidencia específica, devolver el primer gratuito
       return (freeTickets[0]._id as Types.ObjectId).toString();
     }
 
-    // 5. Si no hay gratuitos, devolver el más barato
+    // 6. Si no hay gratuitos, devolver el más barato
     const cheapestTicket = tickets.sort((a, b) => a.price - b.price)[0];
     return (cheapestTicket._id as Types.ObjectId).toString();
   }
