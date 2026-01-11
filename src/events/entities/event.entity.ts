@@ -227,6 +227,19 @@ export class Event {
   @Prop({ type: [Types.ObjectId], ref: 'PaymentMethod', default: [] })
   availablePaymentMethods: Types.ObjectId[];
 
+  // ⭐ Campos de Priorizaci\u00f3n
+  @Prop({ type: Number, default: 50, min: 1, max: 100 })
+  displayPriority: number;
+
+  @Prop({ type: Boolean, default: false })
+  isFeatured: boolean;
+
+  @Prop({ type: Boolean, default: true })
+  showOnHomepage: boolean;
+
+  @Prop({ type: Date })
+  featuredUntil?: Date;
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy!: Types.ObjectId;
 
@@ -312,3 +325,9 @@ EventSchema.pre('validate', function (next) {
 });
 
 EventSchema.index({ availablePaymentMethods: 1 });
+EventSchema.index({
+  isFeatured: 1,
+  displayPriority: -1,
+  startDate: 1,
+  eventStatus: 1,
+});

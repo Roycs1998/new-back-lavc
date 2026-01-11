@@ -315,6 +315,45 @@ export class CreateEventDto {
   @ApiPropertyOptional({ example: 'congreso-gastro-2025' })
   slug?: string;
 
+  // ⭐ Campos de Priorización
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @ApiPropertyOptional({
+    description: 'Prioridad de visualización (1-100)',
+    example: 50,
+    default: 50,
+  })
+  displayPriority?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional({
+    description: 'Marcar como evento destacado/principal',
+    example: false,
+    default: false,
+  })
+  isFeatured?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional({
+    description: 'Mostrar en homepage',
+    example: true,
+    default: true,
+  })
+  showOnHomepage?: boolean;
+
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  @ApiPropertyOptional({
+    description: 'Destacado hasta esta fecha',
+    example: '2026-01-31T23:59:59.000Z',
+  })
+  featuredUntil?: Date;
+
   @ApiPropertyOptional({ type: EventSettingsCreateDto })
   @IsOptional()
   @ValidateNested()

@@ -248,24 +248,24 @@ export class OrdersService {
     const date = new Date();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
 
-    const startOfDay = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    );
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+    // ⭐ FIX: Buscar por patrón de orderNumber en lugar de createdAt
+    // Esto evita race conditions cuando se crean múltiples órdenes en paralelo
+    const pattern = `^ORD-${dateStr}-`;
 
     const lastOrder = await this.orderModel
       .findOne({
-        createdAt: { $gte: startOfDay, $lt: endOfDay },
+        orderNumber: { $regex: pattern },
       })
-      .sort({ createdAt: -1 })
+      .sort({ orderNumber: -1 }) // Ordenar por orderNumber descendente
       .exec();
 
     let sequence = 1;
-    if (lastOrder) {
-      const lastSequence = parseInt(lastOrder.orderNumber.split('-')[2]);
-      sequence = lastSequence + 1;
+    if (lastOrder && lastOrder.orderNumber) {
+      const parts = lastOrder.orderNumber.split('-');
+      const lastSequence = parseInt(parts[2], 10);
+      if (!isNaN(lastSequence)) {
+        sequence = lastSequence + 1;
+      }
     }
 
     return `ORD-${dateStr}-${sequence.toString().padStart(3, '0')}`;

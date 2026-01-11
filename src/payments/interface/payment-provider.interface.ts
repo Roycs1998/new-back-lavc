@@ -28,12 +28,14 @@ export interface PaymentProvider {
     customerInfo: any,
     cardToken?: string,
     metadata?: any,
+    config?: { secretKey?: string }, // ✅ Config dinámico
   ): Promise<PaymentResult>;
 
   refundPayment(
     providerTransactionId: string,
     amount: number,
     reason?: string,
+    config?: { secretKey?: string }, // ✅ Config dinámico
   ): Promise<RefundResult>;
 
   getPaymentStatus(providerTransactionId: string): Promise<any>;

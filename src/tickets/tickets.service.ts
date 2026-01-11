@@ -28,28 +28,37 @@ export class TicketsService {
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
     private qrService: QRService,
-  ) {}
+  ) { }
 
   async generateTicketsForOrder(orderId: string): Promise<Ticket[]> {
-    const order = await this.ordersService.findOne(orderId);
+    // ✅ Fetch ORDER DOCUMENT directly from DB, NOT DTO
+    // El DTO está transformando el userId incorrectamente
+    const orderDoc = await this.ordersService['orderModel']
+      .findById(orderId)
+      .populate('eventId')
+      .exec();
+
+    if (!orderDoc) {
+      throw new NotFoundException('Orden no encontrada');
+    }
 
     const tickets: Ticket[] = [];
 
-    for (const item of order.items) {
+    for (const item of orderDoc.items) {
       for (let i = 0; i < item.quantity; i++) {
         const ticketNumber = await this.generateTicketNumber();
 
         const ticket = new this.ticketModel({
           ticketNumber,
-          orderId: order.id,
-          userId: order.userId,
-          eventId: order.event.id,
+          orderId: orderDoc._id, // Ya es ObjectId
+          userId: orderDoc.userId, // ✅ userId correcto de la BD
+          eventId: orderDoc.eventId,
           ticketTypeId: item.ticketTypeId,
           ticketTypeName: item.ticketTypeName,
           price: item.unitPrice,
           currency: item.currency,
           status: 'active',
-          attendeeInfo: order.customerInfo,
+          attendeeInfo: orderDoc.customerInfo,
         });
 
         const savedTicket = await ticket.save();

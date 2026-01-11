@@ -35,8 +35,8 @@ export class PaymentTransaction {
   @Prop({ unique: true, index: true })
   transactionId: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Order', required: true })
-  orderId: Types.ObjectId;
+  @Prop({ type: [Types.ObjectId], ref: 'Order', required: true, default: [] })
+  orderIds: Types.ObjectId[]; // ✅ Soporta múltiples órdenes
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;

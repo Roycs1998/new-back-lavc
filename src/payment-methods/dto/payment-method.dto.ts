@@ -83,6 +83,10 @@ export class PaymentMethodDto {
 
   @ApiProperty()
   @Expose()
+  id: string; // ✅ Mongoose virtual 'id' - mapea de _id
+
+  @ApiProperty()
+  @Expose()
   name: string;
 
   @ApiProperty()

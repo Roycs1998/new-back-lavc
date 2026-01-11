@@ -4,11 +4,13 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentStatus } from '../common/enums/payment-status.enum';
+import { PaymentMethod } from '../common/enums/payment-method.enum';
 import { OrderStatus } from '../common/enums/order-status.enum';
 import { RefundReason } from '../common/enums/refund-reason.enum';
 import { OrdersService } from '../orders/orders.service';
@@ -22,9 +24,14 @@ import {
 import { EmailService } from 'src/email/email.service';
 import { Event, EventDocument } from '../events/entities/event.entity';
 import { Company, CompanyDocument } from '../companies/entities/company.entity';
+import {
+  PaymentMethod as PaymentMethodEntity,
+  PaymentMethodDocument,
+} from '../payment-methods/entities/payment-method.entity';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private paymentProviders: Map<string, PaymentProvider> = new Map();
 
   constructor(
@@ -36,6 +43,9 @@ export class PaymentsService {
 
     @InjectModel(Company.name)
     private companyModel: Model<CompanyDocument>,
+
+    @InjectModel(PaymentMethodEntity.name)
+    private paymentMethodModel: Model<PaymentMethodDocument>,
 
     @Inject(forwardRef(() => OrdersService))
     private ordersService: OrdersService,
@@ -60,7 +70,7 @@ export class PaymentsService {
     } = createPaymentDto;
 
     const order = await this.ordersService.findOne(orderId);
-
+    console.log("createPaymentDto", createPaymentDto);
     if (order.status !== OrderStatus.PENDING_PAYMENT) {
       throw new BadRequestException('Order is not in a payable state');
     }
@@ -152,6 +162,169 @@ export class PaymentsService {
     }
   }
 
+  /**
+   * ⭐ NUEVO: Procesar pago instantáneo (Culqi, Yape)
+   * Procesa el pago PRIMERO y crea la orden solo si es exitoso
+   */
+  async processInstantPayment(
+    dto: any, // ProcessInstantPaymentDto
+    userId: string,
+  ): Promise<{ order: any; orders?: any[]; transaction: PaymentTransactionDocument }> {
+    const { customerInfo, billingInfo, paymentMethodId, paymentData } = dto;
+
+    // 1. Generar transaction ID
+    const transactionId = await this.generateTransactionId();
+
+    // 2. Obtener carrito y calcular total PRIMERO
+    const cartItems = await this.ordersService['cartService'].getCart(userId);
+
+    if (cartItems.length === 0) {
+      throw new BadRequestException('Carrito vacío');
+    }
+
+    // Calcular total del carrito
+    const total = cartItems.reduce(
+      (sum: number, item: any) => sum + item.totalPrice,
+      0,
+    );
+    const currency = cartItems[0].currency || 'PEN';
+
+    // 3. Ahora SÍ crear transacción con amount
+    const transaction = new this.paymentTransactionModel({
+      transactionId,
+      userId: new Types.ObjectId(userId),
+      amount: total,
+      currency: currency,
+      status: PaymentStatus.PROCESSING,
+      paymentMethod: PaymentMethod.CREDIT_CARD,
+      paymentProvider: 'culqi',
+    });
+
+    // No guardar aún, falta orderId que es requerido
+    // await transaction.save();
+
+    try {
+      // 4. ✅ Obtener configuración de Culqi desde BD
+      const paymentMethodDoc = await this.paymentMethodModel
+        .findById(paymentMethodId)
+        .select('+culqiConfig +culqiConfig.secretKey') // ⭐ Select ambos niveles
+        .exec();
+
+      console.log('🔍 DEBUG - paymentMethodId:', paymentMethodId);
+      console.log('🔍 DEBUG - paymentMethodDoc encontrado:', !!paymentMethodDoc);
+      console.log('🔍 DEBUG - paymentMethodDoc.type:', paymentMethodDoc?.type);
+      console.log('🔍 DEBUG - paymentMethodDoc.culqiConfig:', paymentMethodDoc?.culqiConfig);
+      console.log('🔍 DEBUG - culqiConfig.secretKey existe?:', !!paymentMethodDoc?.culqiConfig?.secretKey);
+
+      if (!paymentMethodDoc) {
+        throw new NotFoundException(
+          `Método de pago con ID ${paymentMethodId} no encontrado`,
+        );
+      }
+
+      if (paymentMethodDoc.type !== 'culqi') {
+        throw new BadRequestException(
+          'El método de pago seleccionado no es Culqi',
+        );
+      }
+
+      if (!paymentMethodDoc.culqiConfig?.secretKey) {
+        throw new BadRequestException(
+          'El método de pago Culqi no tiene secretKey configurado',
+        );
+      }
+
+      this.logger.log(
+        `Using Culqi credentials from DB for PaymentMethod: ${paymentMethodDoc.name}`,
+      );
+
+      // 5. ⭐ PROCESAR PAGO PRIMERO (antes de crear orden)
+      const provider = this.paymentProviders.get('culqi')!;
+
+      const paymentResult = await provider.processPayment(
+        total,
+        currency,
+        PaymentMethod.CREDIT_CARD,
+        customerInfo,
+        paymentData.token,
+        {
+          userId,
+          description: `Compra de ${cartItems.length} tickets`,
+        },
+        { secretKey: paymentMethodDoc.culqiConfig.secretKey },
+      );
+
+      // 6. Si pago FALLÓ, no crear orden
+      if (!paymentResult.success) {
+        // No podemos guardar porque falta orderId
+        // Solo lanzamos error
+        throw new BadRequestException(
+          paymentResult.message || 'Pago rechazado',
+        );
+      }
+
+      // 6. ✅ Pago EXITOSO → Crear órdenes (puede haber múltiples por evento)
+      const orderDtos = await this.ordersService.createOrderFromCart(userId, {
+        customerInfo,
+        billingInfo,
+        paymentMethodId,
+      });
+
+      if (!orderDtos || orderDtos.length === 0) {
+        throw new Error('No se crearon órdenes a partir del carrito');
+      }
+
+      // Usamos la primera orden como referencia principal para la transacción
+      const primaryOrder = orderDtos[0];
+
+      // 7. Actualizar transacción con todos los orderIds
+      transaction.orderIds = orderDtos.map(o => new Types.ObjectId(o.id)); // ✅ Todos los IDs
+      transaction.status = PaymentStatus.COMPLETED;
+      transaction.providerTransactionId = paymentResult.providerTransactionId;
+      transaction.providerResponse = paymentResult.metadata;
+      transaction.processedAt = new Date();
+
+      if (paymentData.token) {
+        transaction.cardInfo = {
+          last4: paymentResult.metadata?.last4 || 'xxxx',
+          brand: paymentResult.metadata?.brand || 'unknown',
+        };
+      }
+
+      // Guardar transacción
+      await transaction.save();
+
+      this.logger.log(`✅ Transaction saved with ${orderDtos.length} orders`);
+
+      // 8. Recorrer TODAS las órdenes para actualizar estado y generar tickets
+      for (const orderDto of orderDtos) {
+        // Actualizar orden a PAID
+        await this.ordersService.updateOrderStatus(
+          orderDto.id,
+          OrderStatus.PAID,
+        );
+
+        // Generar tickets automáticamente para esta orden
+        await this.ticketsService.generateTicketsForOrder(orderDto.id);
+      }
+
+      // 10. Enviar emails
+      // await this.sendPaymentConfirmationEmail(...);
+
+      return {
+        order: primaryOrder, // Retornamos la orden principal o todas? Por ahora la principal para mantener contrato
+        orders: orderDtos, // Retornamos también el array completo por si el front lo usa
+        transaction,
+      };
+    } catch (error) {
+      // ❌ NO intentar guardar transacción si no tiene orderId
+      // La transacción fallida se registra solo si el error ocurre DESPUÉS de crear la orden
+      this.logger.error('Error en processInstantPayment:', error.message);
+
+      throw error;
+    }
+  }
+
   async refundPayment(
     transactionId: string,
     refundAmount?: number,
@@ -201,14 +374,17 @@ export class PaymentsService {
 
         await transaction.save();
 
-        await this.ordersService.updateOrderStatus(
-          transaction.orderId.toString(),
-          OrderStatus.REFUNDED,
-        );
+        // Actualizar estado de todas las órdenes relacionadas
+        for (const ordId of transaction.orderIds) {
+          await this.ordersService.updateOrderStatus(
+            ordId.toString(),
+            OrderStatus.REFUNDED,
+          );
 
-        await this.ticketsService.cancelTicketsForOrder(
-          transaction.orderId.toString(),
-        );
+          await this.ticketsService.cancelTicketsForOrder(
+            ordId.toString(),
+          );
+        }
 
         this.sendRefundNotificationEmail(transaction);
       }
@@ -299,14 +475,17 @@ export class PaymentsService {
       transaction.processedAt = new Date();
       await transaction.save();
 
-      await this.ordersService.updateOrderStatus(
-        transaction.orderId.toString(),
-        OrderStatus.PAID,
-      );
+      // Actualizar estado de todas las órdenes relacionadas
+      for (const ordId of transaction.orderIds) {
+        await this.ordersService.updateOrderStatus(
+          ordId.toString(),
+          OrderStatus.PAID,
+        );
 
-      await this.ticketsService.generateTicketsForOrder(
-        transaction.orderId.toString(),
-      );
+        await this.ticketsService.generateTicketsForOrder(
+          ordId.toString(),
+        );
+      }
     }
   }
 

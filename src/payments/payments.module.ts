@@ -13,11 +13,16 @@ import { EmailModule } from 'src/email/email.module';
 import { EventSchema } from 'src/events/entities/event.entity';
 import { EventsModule } from 'src/events/events.module';
 import { CompaniesModule } from 'src/companies/companies.module';
+import {
+  PaymentMethod,
+  PaymentMethodSchema,
+} from 'src/payment-methods/entities/payment-method.entity';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: PaymentTransaction.name, schema: PaymentTransactionSchema },
+      { name: PaymentMethod.name, schema: PaymentMethodSchema }, // ✅ NUEVO
     ]),
     forwardRef(() => OrdersModule),
     forwardRef(() => TicketsModule),
@@ -29,4 +34,4 @@ import { CompaniesModule } from 'src/companies/companies.module';
   providers: [PaymentsService, CulqiProvider],
   exports: [PaymentsService],
 })
-export class PaymentsModule {}
+export class PaymentsModule { }

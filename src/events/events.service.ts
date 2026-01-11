@@ -60,7 +60,7 @@ export class EventsService {
     private readonly ticketTypeModel: Model<TicketTypeDocument>,
     @Inject(forwardRef(() => CompaniesService))
     private readonly companiesService: CompaniesService,
-  ) {}
+  ) { }
 
   private async generateUniqueSlug(title: string): Promise<string> {
     const baseSlug = title
@@ -603,6 +603,80 @@ export class EventsService {
     }
 
     return toDto(event, EventDto);
+  }
+
+  /**
+   * ⭐ NUEVO: Obtener evento destacado para homepage
+   * Selección automática: Featured > Prioridad > Fecha cercana
+   */
+  async getFeaturedEvent(): Promise<EventDto> {
+    const now = new Date();
+
+    // 1. Buscar evento marcado como featured y vigente
+    let event = await this.eventModel
+      .findOne({
+        isFeatured: true,
+        eventStatus: EventStatus.PUBLISHED,
+        showOnHomepage: true,
+        $or: [
+          { featuredUntil: { $exists: false } },
+          { featuredUntil: null },
+          { featuredUntil: { $gte: now } },
+        ],
+      })
+      .populate('companyId')
+      .populate({
+        path: 'speakers',
+        populate: [{ path: 'personId' }, { path: 'companyId' }],
+      })
+      .sort({ displayPriority: -1 })
+      .exec();
+
+    if (event) {
+      return toDto(event, EventDto);
+    }
+
+    // 2. Buscar eventos futuros publicados
+    event = await this.eventModel
+      .findOne({
+        eventStatus: EventStatus.PUBLISHED,
+        showOnHomepage: true,
+        startDate: { $gte: now },
+      })
+      .populate('companyId')
+      .populate({
+        path: 'speakers',
+        populate: [{ path: 'personId' }, { path: 'companyId' }],
+      })
+      .sort({ displayPriority: -1, startDate: 1 })
+      .exec();
+
+    if (event) {
+      return toDto(event, EventDto);
+    }
+
+    // 3. Buscar eventos activos (en curso)
+    event = await this.eventModel
+      .findOne({
+        eventStatus: EventStatus.PUBLISHED,
+        showOnHomepage: true,
+        startDate: { $lte: now },
+        endDate: { $gte: now },
+      })
+      .populate('companyId')
+      .populate({
+        path: 'speakers',
+        populate: [{ path: 'personId' }, { path: 'companyId' }],
+      })
+      .sort({ displayPriority: -1 })
+      .exec();
+
+    if (event) {
+      return toDto(event, EventDto);
+    }
+
+    // 4. No hay eventos disponibles
+    throw new NotFoundException('No hay eventos disponibles para mostrar');
   }
 
   async update(

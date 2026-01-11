@@ -79,6 +79,23 @@ export class EventsController {
     return this.eventsService.findAll(filterDto, currentUser);
   }
 
+  @Get('featured')
+  @Public()
+  @ApiOperation({
+    summary: 'Obtener evento destacado para homepage',
+    description:
+      'Retorna el evento principal a mostrar en la p\u00e1gina de inicio. ' +
+      'Selecci\u00f3n autom\u00e1tica por: Featured > Prioridad > Fecha cercana',
+  })
+  @ApiOkResponse({
+    type: EventDto,
+    description: 'Evento destacado obtenido correctamente',
+  })
+  @ApiResponse({ status: 404, description: 'No hay eventos disponibles' })
+  getFeaturedEvent(): Promise<EventDto> {
+    return this.eventsService.getFeaturedEvent();
+  }
+
   @Get('public')
   @Public()
   @ApiOperation({ summary: 'Listar eventos publicados (acceso público)' })

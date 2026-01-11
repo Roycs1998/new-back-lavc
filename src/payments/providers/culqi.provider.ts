@@ -31,8 +31,16 @@ export class CulqiProvider implements PaymentProvider {
     customerInfo: any,
     cardToken?: string,
     metadata?: any,
+    config?: { secretKey?: string }, // ✅ NUEVO: Config dinámico desde BD
   ): Promise<PaymentResult> {
     try {
+      // ✅ Usar secretKey dinámico si se proporciona, sino el de env
+      const secretKey = config?.secretKey || this.secretKey;
+
+      if (!secretKey) {
+        throw new BadRequestException('Culqi secret key not configured');
+      }
+
       // ⭐ CORE LOGIC: Convert amount to cents for Culqi (mantiene lógica del proyecto anterior)
       const amountInCents = Math.round(amount * 100);
 
@@ -52,11 +60,12 @@ export class CulqiProvider implements PaymentProvider {
       };
 
       this.logger.log(`Processing Culqi payment for amount: ${amountInCents} ${currency}`);
+      this.logger.log(`Using ${config?.secretKey ? 'DB' : 'ENV'} credentials`);
 
       // ⭐ CORE LOGIC: Call Culqi API (mantiene la comunicación exacta)
       const response = await axios.post(`${this.apiUrl}/charges`, chargeData, {
         headers: {
-          Authorization: `Bearer ${this.secretKey}`,
+          Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
         },
       });
@@ -133,8 +142,16 @@ export class CulqiProvider implements PaymentProvider {
     providerTransactionId: string,
     amount: number,
     reason?: string,
+    config?: { secretKey?: string }, // ✅ NUEVO: Config dinámico desde BD
   ): Promise<RefundResult> {
     try {
+      // ✅ Usar secretKey dinámico si se proporciona, sino el de env
+      const secretKey = config?.secretKey || this.secretKey;
+
+      if (!secretKey) {
+        throw new BadRequestException('Culqi secret key not configured');
+      }
+
       const amountInCents = Math.round(amount * 100);
 
       const refundData = {
@@ -145,7 +162,7 @@ export class CulqiProvider implements PaymentProvider {
 
       const response = await axios.post(`${this.apiUrl}/refunds`, refundData, {
         headers: {
-          Authorization: `Bearer ${this.secretKey}`,
+          Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
         },
       });

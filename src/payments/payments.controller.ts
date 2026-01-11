@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { ProcessInstantPaymentDto } from './dto/process-instant-payment.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -31,7 +32,7 @@ import { RefundReason } from '../common/enums/refund-reason.enum';
 @Controller('payments')
 @ApiBearerAuth('JWT-auth')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(private readonly paymentsService: PaymentsService) { }
 
   @Post('process')
   @HttpCode(HttpStatus.OK)
@@ -44,6 +45,31 @@ export class PaymentsController {
     @CurrentUser() currentUser: CurrentUserData,
   ) {
     return this.paymentsService.processPayment(createPaymentDto);
+  }
+
+  @Post('process-instant')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Process instant payment (Culqi, Yape)',
+    description:
+      'Procesa el pago PRIMERO y crea la orden solo si es exitoso. ' +
+      'Para métodos de pago con autoConfirm: true. ' +
+      'Retorna la orden en estado PAID y la transacción.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment processed and order created successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Payment failed - no order created',
+  })
+  processInstantPayment(
+    @Body() dto: ProcessInstantPaymentDto,
+    @CurrentUser() currentUser: CurrentUserData,
+  ) {
+    return this.paymentsService.processInstantPayment(dto, currentUser.id);
   }
 
   @Get('history')
