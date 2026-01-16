@@ -17,11 +17,9 @@ import type { Express } from 'express';
 import { SpeakersService } from './speakers.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { CompanyScopeGuard } from 'src/common/guards/company-scope.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import {
-  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConsumes,
   ApiCreatedResponse,
@@ -32,7 +30,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
-import { CreateSpeakerWithPersonDto } from 'src/persons/dto/create-speaker-with-person.dto';
+import { CreateSpeakerWithUserDto } from './dto/create-speaker-with-user.dto';
 import { SpeakerFilterDto } from './dto/speaker-filter.dto';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
@@ -43,24 +41,21 @@ import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 
 @ApiTags('Oradores')
 @Controller('speakers')
-@UseGuards(JwtAuthGuard, RolesGuard, CompanyScopeGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
 @ApiBearerAuth('JWT-auth')
 export class SpeakersController {
   constructor(private readonly speakersService: SpeakersService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear speaker y su persona en un solo paso' })
+  @ApiOperation({ summary: 'Crear speaker y su usuario en un solo paso' })
   @ApiCreatedResponse({ type: SpeakerDto })
-  @ApiBadRequestResponse({
-    description: 'Validación fallida o empresa inactiva',
-  })
   create(
-    @Body() createSpeakerWithPersonDto: CreateSpeakerWithPersonDto,
+    @Body() createSpeakerWithUserDto: CreateSpeakerWithUserDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
-    return this.speakersService.createSpeakerWithPerson(
-      createSpeakerWithPersonDto,
+  ): Promise<SpeakerDto> {
+    return this.speakersService.createSpeakerWithUser(
+      createSpeakerWithUserDto,
       currentUser.id,
     );
   }
@@ -70,10 +65,10 @@ export class SpeakersController {
   @ApiOperation({
     summary: 'Listar speakers (paginado y filtrado)',
     description:
-      'Soporta búsqueda full-text (search), filtros por company, specialty, arrays (languages/topics), rangos (años/fee), fechas y orden dinámico.',
+      'Soporta búsqueda full-text (search), filtros por specialty, arrays (languages/topics), rangos (años/fee), fechas y orden dinámico.',
   })
   @ApiOkResponse({ type: SpeakerPaginatedDto })
-  findAll(@Query() filterDto: SpeakerFilterDto) {
+  findAll(@Query() filterDto: SpeakerFilterDto): Promise<SpeakerPaginatedDto> {
     return this.speakersService.findAll(filterDto);
   }
 
@@ -91,12 +86,11 @@ export class SpeakersController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un speaker' })
   @ApiOkResponse({ type: SpeakerDto })
-  @ApiBadRequestResponse({ description: 'Validación fallida' })
   update(
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() updateSpeakerDto: UpdateSpeakerDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<SpeakerDto> {
     return this.speakersService.update(id, updateSpeakerDto, currentUser.id);
   }
 
@@ -109,7 +103,7 @@ export class SpeakersController {
     @Param('id', ParseObjectIdPipe) id: string,
     @Body() dto: StatusDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<SpeakerDto> {
     return this.speakersService.changeStatus(
       id,
       dto.entityStatus,
@@ -123,7 +117,7 @@ export class SpeakersController {
   softDelete(
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<SpeakerDto> {
     return this.speakersService.softDelete(id, currentUser.id);
   }
 
@@ -139,7 +133,7 @@ export class SpeakersController {
   async updatePhoto(
     @Param('id', ParseObjectIdPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
-  ) {
+  ): Promise<SpeakerDto> {
     if (!file) {
       throw new BadRequestException('No se proporcionó archivo');
     }
@@ -159,7 +153,9 @@ export class SpeakersController {
       'Elimina la foto del speaker del storage y remueve la referencia de la entidad Person.',
   })
   @ApiOkResponse({ type: SpeakerDto })
-  async deletePhoto(@Param('id', ParseObjectIdPipe) id: string) {
+  async deletePhoto(
+    @Param('id', ParseObjectIdPipe) id: string,
+  ): Promise<SpeakerDto> {
     return await this.speakersService.deleteSpeakerPhoto(id);
   }
 }

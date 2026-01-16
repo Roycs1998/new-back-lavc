@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ParticipantType } from '../../common/enums/participant-type.enum';
+import { User } from '../../users/entities/user.entity';
 
 export type EventParticipantDocument = EventParticipant & Document;
 
@@ -18,6 +19,8 @@ export class EventParticipant {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   userId?: Types.ObjectId;
+
+  readonly user?: User;
 
   @Prop({ type: Types.ObjectId, ref: 'EventSponsor' })
   eventSponsorId?: Types.ObjectId;

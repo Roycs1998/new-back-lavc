@@ -9,7 +9,10 @@ import {
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { TicketType, TicketTypeDocument } from './entities/ticket.entity';
+import {
+  TicketType,
+  TicketTypeDocument,
+} from 'src/event-ticket-types/entities/ticket.entity';
 import {
   FilterQuery,
   Model,
@@ -17,15 +20,14 @@ import {
   ProjectionType,
   QueryOptions,
   Types,
+  UpdateQuery,
 } from 'mongoose';
 import { Event, EventDocument } from './entities/event.entity';
 import { CompaniesService } from 'src/companies/companies.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { EventStatus } from 'src/common/enums/event-status.enum';
-import { TicketStatus } from 'src/common/enums/ticket-status.enum';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import { EventFilterDto } from './dto/event-filter.dto';
-import { CreateTicketTypeDto } from './dto/create-ticket-type.dto';
 import { toObjectId } from 'src/utils/toObjectId';
 import { EventDto } from './dto/event.dto';
 import { toDto } from 'src/utils/toDto';
@@ -34,10 +36,7 @@ import { escapeRegex } from 'src/utils/escapeRegex';
 import { EventPaginatedDto } from './dto/event-pagination.dto';
 import { EventStatsDto } from './dto/event-stats.dto';
 import { CompanyEventStatsDto } from './dto/company-event-stats.dto';
-import { TicketTypeDto } from './dto/ticket-type.dto';
-import { UpdateTicketTypeDto } from './dto/update-ticket-type.dto';
-import { ParticipantType } from 'src/common/enums/participant-type.enum';
-import { Currency } from 'src/common/enums/currency.enum';
+import { EventTicketTypesService } from 'src/event-ticket-types/event-ticket-types.service';
 
 type SortDir = 1 | -1;
 
@@ -46,6 +45,7 @@ interface RequestingUser {
   email?: string;
   roles: string[];
   companyId?: string;
+  companyIds?: string[];
 }
 
 function needsLookup(sortObj: Record<string, SortDir>): boolean {
@@ -60,7 +60,8 @@ export class EventsService {
     private readonly ticketTypeModel: Model<TicketTypeDocument>,
     @Inject(forwardRef(() => CompaniesService))
     private readonly companiesService: CompaniesService,
-  ) { }
+    private readonly eventTicketTypesService: EventTicketTypesService,
+  ) {}
 
   private async generateUniqueSlug(title: string): Promise<string> {
     const baseSlug = title
@@ -168,7 +169,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'person',
+          path: 'user',
         },
       })
       .exec();
@@ -179,54 +180,12 @@ export class EventsService {
       );
     }
 
-    // Generar tickets de sistema por defecto
-    await this.createDefaultSystemTickets(
-      (created as any)._id.toString(),
+    await this.eventTicketTypesService.createDefaultSystemTickets(
+      created._id.toString(),
       createdBy,
     );
 
     return toDto(doc, EventDto);
-  }
-
-  private async createDefaultSystemTickets(eventId: string, createdBy: string) {
-    const systemTickets = [
-      {
-        name: 'Acceso de Staff',
-        description: 'Acceso para Staff Operativo',
-        price: 0,
-        quantity: 9999,
-        targetRole: ParticipantType.OPERATIONAL_STAFF,
-      },
-      {
-        name: 'Accesso de Expositores',
-        description: 'Acceso para Expositores (Staff)',
-        price: 0,
-        quantity: 9999,
-        targetRole: ParticipantType.STAFF, // Expositores en el backend son STAFF
-      },
-      {
-        name: 'Acceso de Invitados',
-        description: 'Acceso para Invitados',
-        price: 0,
-        quantity: 9999,
-        targetRole: ParticipantType.GUEST,
-      },
-    ];
-
-    for (const ticket of systemTickets) {
-      await this.ticketTypeModel.create({
-        eventId: new Types.ObjectId(eventId),
-        name: ticket.name,
-        description: ticket.description,
-        price: ticket.price,
-        quantity: ticket.quantity,
-        currency: Currency.PEN,
-        ticketStatus: TicketStatus.AVAILABLE,
-        isSystem: true,
-        targetRole: ticket.targetRole,
-        createdBy: new Types.ObjectId(createdBy),
-      });
-    }
   }
 
   private buildEventStatusFilters(
@@ -293,16 +252,19 @@ export class EventsService {
   private buildCompanyFilter(
     requestingUser: RequestingUser | undefined,
     companyId?: string,
-  ): { companyId?: Types.ObjectId } {
-    // Si el usuario es COMPANY_ADMIN, siempre filtrar por su companyId
+  ): { companyId?: Types.ObjectId | { $in: Types.ObjectId[] } } {
     if (
       requestingUser?.roles.includes(UserRole.COMPANY_ADMIN) &&
-      requestingUser?.companyId
+      requestingUser?.companyIds &&
+      requestingUser.companyIds.length > 0
     ) {
-      return { companyId: toObjectId(requestingUser.companyId) };
+      return {
+        companyId: {
+          $in: requestingUser.companyIds.map((id) => toObjectId(id)),
+        },
+      };
     }
 
-    // Si se proporciona companyId en los parámetros, usarlo
     if (companyId) {
       return { companyId: toObjectId(companyId) };
     }
@@ -310,7 +272,7 @@ export class EventsService {
     return {};
   }
 
-  private buildSearchFilter(search?: string): { $or?: any[] } {
+  private buildSearchFilter(search?: string): FilterQuery<Event> {
     if (!search?.trim()) {
       return {};
     }
@@ -461,7 +423,7 @@ export class EventsService {
         },
       },
       { $unwind: { path: '$company', preserveNullAndEmptyArrays: true } },
-      { $sort: sortObj as any },
+      { $sort: sortObj as Record<string, 1 | -1> },
       { $skip: skip },
       { $limit: limit },
     ];
@@ -510,7 +472,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'person',
+          path: 'user',
         },
       })
       .sort(sortObj)
@@ -539,7 +501,7 @@ export class EventsService {
     id: string,
     requestingUser?: RequestingUser,
   ): Promise<EventDto> {
-    const filter: any = { _id: id };
+    const filter: FilterQuery<Event> = { _id: id };
 
     const event = await this.eventModel
       .findOne(filter)
@@ -547,7 +509,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'person',
+          path: 'user',
           select: 'firstName lastName email',
         },
       })
@@ -594,7 +556,7 @@ export class EventsService {
       .populate('company')
       .populate({
         path: 'speakers',
-        populate: [{ path: 'personId' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .exec();
     console.log(event);
@@ -627,7 +589,7 @@ export class EventsService {
       .populate('companyId')
       .populate({
         path: 'speakers',
-        populate: [{ path: 'personId' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .sort({ displayPriority: -1 })
       .exec();
@@ -646,7 +608,7 @@ export class EventsService {
       .populate('companyId')
       .populate({
         path: 'speakers',
-        populate: [{ path: 'personId' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .sort({ displayPriority: -1, startDate: 1 })
       .exec();
@@ -666,7 +628,7 @@ export class EventsService {
       .populate('companyId')
       .populate({
         path: 'speakers',
-        populate: [{ path: 'personId' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .sort({ displayPriority: -1 })
       .exec();
@@ -689,7 +651,6 @@ export class EventsService {
       throw new NotFoundException(`Evento con ID ${id} no encontrado`);
     }
 
-    // Validar slug único si se está actualizando
     if (updateEventDto.slug && updateEventDto.slug !== existing.slug) {
       const slugExists = await this.eventModel.exists({
         slug: updateEventDto.slug,
@@ -702,7 +663,6 @@ export class EventsService {
       }
     }
 
-    // Validar fechas
     const startDate = updateEventDto.startDate
       ? new Date(updateEventDto.startDate)
       : existing.startDate;
@@ -715,20 +675,16 @@ export class EventsService {
       );
     }
 
-    // Preparar datos para actualización
-    // IMPORTANTE: No incluir companyId ni eventStatus (se manejan por separado)
     const updateData: Record<string, unknown> = {
       ...updateEventDto,
       updatedBy: toObjectId(updatedBy),
       updatedAt: new Date(),
     };
 
-    // Convertir speakers a ObjectId si están presentes
     if (Array.isArray(updateEventDto.speakers)) {
       updateData.speakers = updateEventDto.speakers.map(toObjectId);
     }
 
-    // Convertir fechas si están presentes
     if (updateEventDto.startDate) {
       updateData.startDate = startDate;
     }
@@ -736,7 +692,6 @@ export class EventsService {
       updateData.endDate = endDate;
     }
 
-    // Sanitizar undefined values
     const $set = sanitizeDefined(updateData);
 
     const updated = await this.eventModel
@@ -749,7 +704,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'person',
+          path: 'user',
         },
       })
       .exec();
@@ -768,11 +723,11 @@ export class EventsService {
     rejectionReason?: string,
   ): Promise<EventDto> {
     const changedById = toObjectId(changedBy);
-    const $set: Record<string, any> = {
+    const $set: UpdateQuery<Event>['$set'] = {
       eventStatus,
       updatedBy: changedById,
     };
-    const $unset: Record<string, ''> = {};
+    const $unset: UpdateQuery<Event>['$unset'] = {};
 
     if (eventStatus === EventStatus.APPROVED) {
       $set.approvedBy = changedById;
@@ -794,7 +749,10 @@ export class EventsService {
       $unset.rejectionReason = '';
     }
 
-    const updateDoc: any = { $set, $currentDate: { updatedAt: true } };
+    const updateDoc: UpdateQuery<Event> = {
+      $set,
+      $currentDate: { updatedAt: true },
+    };
     if (Object.keys($unset).length) updateDoc.$unset = $unset;
 
     const event = await this.eventModel
@@ -807,7 +765,7 @@ export class EventsService {
       .populate({
         path: 'speakers',
         populate: {
-          path: 'person',
+          path: 'user',
         },
       })
       .exec();
@@ -816,7 +774,7 @@ export class EventsService {
     return toDto(event, EventDto);
   }
 
-  async submitForReview(id: string) {
+  async submitForReview(id: string): Promise<EventDto> {
     const event = await this.eventModel.findOne({ _id: id });
 
     if (!event) throw new NotFoundException('Evento no encontrado');
@@ -837,7 +795,8 @@ export class EventsService {
 
     event.rejectionReason = undefined;
 
-    return event.save();
+    const savedEvent = await event.save();
+    return toDto(savedEvent, EventDto);
   }
 
   async softDelete(id: string, deletedBy: string): Promise<EventDto> {
@@ -987,104 +946,5 @@ export class EventsService {
       eventsByStatus: statusCounts,
       ...financialStats,
     };
-  }
-
-  async createTicketType(
-    eventId: string,
-    createTicketTypeDto: CreateTicketTypeDto,
-    createdBy: string,
-  ): Promise<TicketTypeDto> {
-    try {
-      const event = await this.eventModel
-        .findOne({
-          _id: toObjectId(eventId),
-          eventStatus: { $ne: EventStatus.DELETED },
-        })
-        .lean()
-        .exec();
-
-      if (!event) throw new NotFoundException('Evento no encontrado');
-
-      const ticketTypeData = {
-        ...createTicketTypeDto,
-        eventId: new Types.ObjectId(eventId),
-        createdBy: new Types.ObjectId(createdBy),
-        ticketStatus:
-          createTicketTypeDto.ticketStatus ?? TicketStatus.AVAILABLE,
-      };
-
-      const created = await this.ticketTypeModel.create(ticketTypeData);
-
-      return toDto(created, TicketTypeDto);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  async updateTicketType(
-    ticketTypeId: string,
-    updateData: UpdateTicketTypeDto,
-    updatedBy: string,
-  ): Promise<TicketTypeDto> {
-    const current = await this.ticketTypeModel.findById(ticketTypeId).exec();
-    if (!current) {
-      throw new NotFoundException(
-        `No se ha encontrado el tipo de ticket con ID ${ticketTypeId}`,
-      );
-    }
-
-    const $set = sanitizeDefined({
-      ...updateData,
-      updatedBy: toObjectId(updatedBy),
-      updatedAt: new Date(),
-    });
-
-    const updated = await this.ticketTypeModel
-      .findByIdAndUpdate(
-        ticketTypeId,
-        { $set },
-        {
-          new: true,
-          runValidators: true,
-          context: 'query',
-        },
-      )
-      .exec();
-
-    if (!updated)
-      throw new NotFoundException(
-        `Ticket con ID ${ticketTypeId} no encontrado`,
-      );
-
-    return toDto(updated, TicketTypeDto);
-  }
-
-  async getEventTicketTypes(eventId: string): Promise<TicketTypeDto[]> {
-    const docs = await this.ticketTypeModel
-      .find({
-        eventId: new Types.ObjectId(eventId),
-        price: { $gt: 0 },
-      })
-      .sort({ createdAt: 1 })
-      .exec();
-
-    return docs.map((d) => toDto(d, TicketTypeDto));
-  }
-
-  async deleteTicketType(ticketTypeId: string): Promise<void> {
-    const ticketType = await this.ticketTypeModel.findById(ticketTypeId);
-    if (!ticketType) {
-      throw new NotFoundException(
-        `No se ha encontrado el tipo de ticket con ID ${ticketTypeId}`,
-      );
-    }
-
-    if (ticketType.sold > 0) {
-      throw new BadRequestException(
-        'No se puede eliminar un tipo de entrada que ya se ha vendido.',
-      );
-    }
-
-    await this.ticketTypeModel.findByIdAndDelete(ticketTypeId);
   }
 }

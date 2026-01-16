@@ -34,4 +34,4 @@ import {
   providers: [PaymentsService, CulqiProvider],
   exports: [PaymentsService],
 })
-export class PaymentsModule { }
+export class PaymentsModule {}

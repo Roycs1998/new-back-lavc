@@ -307,6 +307,10 @@ export class QRService {
     return Buffer.from(JSON.stringify(signedData)).toString('base64');
   }
 
+  verifyTicketQR(qrCode: string): any {
+    return this.verifyQRSignature(qrCode);
+  }
+
   private verifyQRSignature(qrCode: string): any | null {
     try {
       const decoded = JSON.parse(Buffer.from(qrCode, 'base64').toString());

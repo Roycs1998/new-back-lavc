@@ -5,23 +5,25 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, FilterQuery } from 'mongoose';
 import {
   EventParticipant,
   EventParticipantDocument,
 } from './entities/event-participant.entity';
 import { RegisterParticipantDto } from './dto/register-participant.dto';
 import { EventParticipantDto } from './dto/event-participant.dto';
+import { PaginatedParticipantsDto } from './dto/paginated-participants.dto';
 import { AssignOperationalStaffDto } from './dto/assign-operational-staff.dto';
-import { EventSponsorsService } from './event-sponsors.service';
+import { EventSponsorsService } from '../event-sponsors/event-sponsors.service';
 import {
   EventSponsor,
   EventSponsorDocument,
-} from './entities/event-sponsor.entity';
+} from '../event-sponsors/entities/event-sponsor.entity';
 import { ParticipantType } from '../common/enums/participant-type.enum';
 import { Event, EventDocument } from './entities/event.entity';
 import { toDto } from '../utils/toDto';
 import { ListParticipantsQueryDto } from './dto/list-participants-query.dto';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Injectable()
 export class EventParticipantsService {
@@ -33,7 +35,7 @@ export class EventParticipantsService {
     @InjectModel(EventSponsor.name)
     private eventSponsorModel: Model<EventSponsorDocument>,
     private eventSponsorsService: EventSponsorsService,
-  ) { }
+  ) {}
 
   async registerParticipant(
     eventId: string,
@@ -92,17 +94,14 @@ export class EventParticipantsService {
 
     const populated = await this.eventParticipantModel
       .findById(saved._id)
+      .populate('user')
       .populate({
-        path: 'user',
-        populate: { path: 'person' },
-      })
-      .populate({
-        path: 'sponsor',
-        populate: { path: 'company' },
+        path: 'eventSponsorId',
+        populate: { path: 'companyId' },
       })
       .populate({
         path: 'speaker',
-        populate: [{ path: 'person' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .exec();
 
@@ -112,38 +111,46 @@ export class EventParticipantsService {
   async getParticipantsByEvent(
     eventId: string,
     options?: ListParticipantsQueryDto,
-    currentUser?: { id: string; companyId?: string },
-  ): Promise<{
-    data: EventParticipantDto[];
-    meta: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-      hasNextPage: boolean;
-      hasPrevPage: boolean;
-    };
-  }> {
+    currentUser?: {
+      id: string;
+      companyId?: string;
+      companyIds?: string[];
+      roles?: string[];
+    },
+  ): Promise<PaginatedParticipantsDto> {
     const page = options?.page || 1;
     const limit = options?.limit || 10;
     const skip = (page - 1) * limit;
     const sortBy = options?.sortBy || 'registeredAt';
     const sortOrder = options?.sortOrder === 'asc' ? 1 : -1;
 
-    const filter: any = {
+    const filter: FilterQuery<EventParticipant> = {
       eventId: new Types.ObjectId(eventId),
-      isActive: options?.isActive !== undefined ? options.isActive == 1 : true,
+      isActive: options?.isActive !== undefined ? options.isActive : true,
     };
 
-    if (currentUser?.companyId) {
-      const sponsor = await this.eventSponsorModel.findOne({
-        eventId: new Types.ObjectId(eventId),
-        companyId: new Types.ObjectId(currentUser.companyId),
-        isActive: true,
-      });
+    if (
+      currentUser?.roles?.includes(UserRole.COMPANY_ADMIN) &&
+      currentUser.companyIds &&
+      currentUser.companyIds.length > 0
+    ) {
+      const sponsors = await this.eventSponsorModel
+        .find({
+          eventId: new Types.ObjectId(eventId),
+          companyId: {
+            $in: currentUser.companyIds.map((id) => new Types.ObjectId(id)),
+          },
+          isActive: true,
+        })
+        .select('_id')
+        .exec();
 
-      if (sponsor) {
-        filter.eventSponsorId = sponsor._id;
+      const sponsorIds = sponsors.map((s) => s._id);
+
+      if (sponsorIds.length > 0) {
+        filter.eventSponsorId = { $in: sponsorIds };
+      } else {
+        filter.eventSponsorId = { $in: [] };
       }
     } else if (options?.sponsorId) {
       filter.eventSponsorId = new Types.ObjectId(options.sponsorId);
@@ -158,17 +165,14 @@ export class EventParticipantsService {
     const total = await this.eventParticipantModel.countDocuments(filter);
 
     const participants = await query
-      .populate({
-        path: 'user',
-        populate: { path: 'person' },
-      })
+      .populate('user')
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
       })
       .populate({
         path: 'speaker',
-        populate: [{ path: 'person' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .sort({ [sortBy]: sortOrder })
       .skip(skip)
@@ -179,7 +183,7 @@ export class EventParticipantsService {
     let filteredParticipants = participants;
     if (options?.search) {
       const searchLower = options.search.toLowerCase();
-      filteredParticipants = participants.filter((p: any) => {
+      filteredParticipants = participants.filter((p) => {
         const user = p.user;
         if (!user) return false;
 
@@ -222,17 +226,14 @@ export class EventParticipantsService {
         eventSponsorId: new Types.ObjectId(eventSponsorId),
         isActive: true,
       })
-      .populate({
-        path: 'user',
-        populate: { path: 'person' },
-      })
+      .populate('user')
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
       })
       .populate({
         path: 'speaker',
-        populate: [{ path: 'person' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .sort({ registeredAt: -1 })
       .exec();
@@ -250,17 +251,14 @@ export class EventParticipantsService {
         eventId: new Types.ObjectId(eventId),
         isActive: true,
       })
-      .populate({
-        path: 'user',
-        populate: { path: 'person' },
-      })
+      .populate('user')
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
       })
       .populate({
         path: 'speaker',
-        populate: [{ path: 'person' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .exec();
 
@@ -302,17 +300,14 @@ export class EventParticipantsService {
 
     const populated = await this.eventParticipantModel
       .findById(saved._id)
-      .populate({
-        path: 'user',
-        populate: { path: 'person' },
-      })
+      .populate('user')
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
       })
       .populate({
         path: 'speaker',
-        populate: [{ path: 'person' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .exec();
 
@@ -348,17 +343,14 @@ export class EventParticipantsService {
         participantType: ParticipantType.STAFF,
         isActive: true,
       })
-      .populate({
-        path: 'user',
-        populate: { path: 'person' },
-      })
+      .populate('user')
       .populate({
         path: 'sponsor',
         populate: { path: 'company' },
       })
       .populate({
         path: 'speaker',
-        populate: [{ path: 'person' }, { path: 'companyId' }],
+        populate: [{ path: 'user' }, { path: 'company' }],
       })
       .sort({ registeredAt: -1 })
       .exec();
@@ -471,7 +463,7 @@ export class EventParticipantsService {
     const currentSpeakerIds = currentParticipants.map((p) =>
       p.speakerId?.toString(),
     );
-    const newSpeakerIds = speakerIds.map((id) => id.toString());
+    const newSpeakerIds = [...new Set(speakerIds.map((id) => id.toString()))];
 
     const removedSpeakerIds = currentSpeakerIds.filter(
       (id) => id && !newSpeakerIds.includes(id),
@@ -496,28 +488,30 @@ export class EventParticipantsService {
       (id) => !currentSpeakerIds.includes(id),
     );
 
-    for (const speakerId of speakersToAdd) {
-      const existing = await this.eventParticipantModel.findOne({
-        eventId: eventObjectId,
-        speakerId: new Types.ObjectId(speakerId),
-        participantType: ParticipantType.SPEAKER,
-      });
-
-      if (existing) {
-        if (!existing.isActive) {
-          existing.isActive = true;
-          existing.cancelledAt = undefined;
-          await existing.save();
-        }
-      } else {
-        await this.eventParticipantModel.create({
+    await Promise.all(
+      speakersToAdd.map(async (speakerId) => {
+        const existing = await this.eventParticipantModel.findOne({
           eventId: eventObjectId,
           speakerId: new Types.ObjectId(speakerId),
           participantType: ParticipantType.SPEAKER,
-          registeredAt: new Date(),
-          isActive: true,
         });
-      }
-    }
+
+        if (existing) {
+          if (!existing.isActive) {
+            existing.isActive = true;
+            existing.cancelledAt = undefined;
+            await existing.save();
+          }
+        } else {
+          await this.eventParticipantModel.create({
+            eventId: eventObjectId,
+            speakerId: new Types.ObjectId(speakerId),
+            participantType: ParticipantType.SPEAKER,
+            registeredAt: new Date(),
+            isActive: true,
+          });
+        }
+      }),
+    );
   }
 }

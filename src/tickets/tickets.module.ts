@@ -7,6 +7,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { EventsModule } from '../events/events.module';
 import { UsersModule } from '../users/users.module';
 import { QRModule } from '../qr/qr.module';
+import { EventTicketTypesModule } from '../event-ticket-types/event-ticket-types.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { QRModule } from '../qr/qr.module';
     forwardRef(() => OrdersModule),
     forwardRef(() => EventsModule),
     forwardRef(() => UsersModule),
+    EventTicketTypesModule,
     QRModule,
   ],
   controllers: [TicketsController],

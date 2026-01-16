@@ -7,6 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { EventsService } from '../events/events.service';
+import { EventTicketTypesService } from '../event-ticket-types/event-ticket-types.service';
 import { CartItem, CartItemDocument } from './entities/cart-item.entity';
 import { CartSummaryDto } from './dto/cart-summary.dto';
 import { Currency } from 'src/common/enums/currency.enum';
@@ -18,6 +19,7 @@ export class CartService {
   constructor(
     @InjectModel(CartItem.name) private cartItemModel: Model<CartItemDocument>,
     private eventsService: EventsService,
+    private eventTicketTypesService: EventTicketTypesService,
   ) {}
 
   async addToCart(
@@ -34,7 +36,8 @@ export class CartService {
       );
     }
 
-    const ticketTypes = await this.eventsService.getEventTicketTypes(eventId);
+    const ticketTypes =
+      await this.eventTicketTypesService.getEventTicketTypes(eventId);
 
     const ticketType = ticketTypes.find((tt) => tt.id === ticketTypeId);
 

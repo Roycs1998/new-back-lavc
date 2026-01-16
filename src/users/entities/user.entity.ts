@@ -14,14 +14,26 @@ export type UserDocument = User & Document;
   timestamps: true,
 })
 export class User {
+  @Prop({ required: true, trim: true })
+  firstName: string;
+
+  @Prop({ required: true, trim: true })
+  lastName: string;
+
+  @Prop({ trim: true })
+  phone?: string;
+
+  @Prop({ type: Date })
+  dateOfBirth?: Date;
+
+  @Prop({ type: String })
+  avatar?: string;
+
   @Prop({ required: true, trim: true, lowercase: true })
   email: string;
 
   @Prop({ required: true, select: false })
   password: string;
-
-  @Prop({ type: Types.ObjectId, ref: 'Person', required: true })
-  personId: Types.ObjectId;
 
   @Prop({
     type: [String],
@@ -30,8 +42,8 @@ export class User {
   })
   roles: UserRole[];
 
-  @Prop({ type: Types.ObjectId, ref: 'Company', required: false })
-  companyId?: Types.ObjectId;
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Company' }], default: [] })
+  companyIds: Types.ObjectId[];
 
   @Prop({ default: false })
   emailVerified: boolean;
@@ -64,18 +76,11 @@ export class User {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.virtual('person', {
-  ref: 'Person',
-  localField: 'personId',
-  foreignField: '_id',
-  justOne: true,
-});
-
-UserSchema.virtual('company', {
+UserSchema.virtual('companies', {
   ref: 'Company',
-  localField: 'companyId',
+  localField: 'companyIds',
   foreignField: '_id',
-  justOne: true,
+  justOne: false,
 });
 
 UserSchema.index(
@@ -86,6 +91,5 @@ UserSchema.index(
   },
 );
 
-UserSchema.index({ personId: 1 });
-UserSchema.index({ companyId: 1 });
+UserSchema.index({ companyIds: 1 });
 UserSchema.index({ role: 1 });

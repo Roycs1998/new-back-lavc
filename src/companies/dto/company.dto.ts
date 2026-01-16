@@ -26,6 +26,13 @@ class AddressDto {
   @Expose()
   country!: string;
 
+  @ApiPropertyOptional({
+    description: 'Código de país',
+    example: 'PE',
+  })
+  @Expose()
+  countryCode?: string;
+
   @ApiPropertyOptional({ description: 'Código postal', example: '15046' })
   @Expose()
   zipCode?: string;

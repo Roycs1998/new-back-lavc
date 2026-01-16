@@ -23,7 +23,7 @@ export class PaymentMethodsService {
   constructor(
     @InjectModel(PaymentMethod.name)
     private paymentMethodModel: Model<PaymentMethodDocument>,
-  ) { }
+  ) {}
 
   async create(
     createDto: CreatePaymentMethodDto,
@@ -104,7 +104,9 @@ export class PaymentMethodsService {
 
     // ⭐ FALLBACK: Si no hay métodos para la empresa, retornar métodos globales
     if (methods.length === 0 && companyId) {
-      this.logger.log(`No payment methods found for company ${companyId}, returning global methods`);
+      this.logger.log(
+        `No payment methods found for company ${companyId}, returning global methods`,
+      );
 
       return this.paymentMethodModel
         .find({
@@ -191,7 +193,8 @@ export class PaymentMethodsService {
     await paymentMethod.save();
 
     this.logger.log(
-      `Payment method ${paymentMethod.isActive ? 'activated' : 'deactivated'
+      `Payment method ${
+        paymentMethod.isActive ? 'activated' : 'deactivated'
       }: ${id}`,
     );
     return paymentMethod;

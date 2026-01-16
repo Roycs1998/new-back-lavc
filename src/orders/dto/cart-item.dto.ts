@@ -64,7 +64,7 @@ class CartTicketTypeViewDto {
   @Expose()
   description?: string;
 
-  @ApiProperty({ example: 150.00 })
+  @ApiProperty({ example: 150.0 })
   @Expose()
   price!: number;
 

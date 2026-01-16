@@ -18,7 +18,7 @@ export class OrdersService {
   constructor(
     @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
     private cartService: CartService,
-  ) { }
+  ) {}
 
   async createOrderFromCart(
     userId: string,

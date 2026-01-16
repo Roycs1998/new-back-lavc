@@ -7,6 +7,7 @@ import { CartItem, CartItemSchema } from './entities/cart-item.entity';
 import { EventsModule } from 'src/events/events.module';
 import { CartController } from './cart.controller';
 import { CartService } from './cart.service';
+import { EventTicketTypesModule } from 'src/event-ticket-types/event-ticket-types.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CartService } from './cart.service';
       { name: CartItem.name, schema: CartItemSchema },
     ]),
     forwardRef(() => EventsModule),
+    EventTicketTypesModule,
   ],
   controllers: [OrdersController, CartController],
   providers: [OrdersService, CartService],

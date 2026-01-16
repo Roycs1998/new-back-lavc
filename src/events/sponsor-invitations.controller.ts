@@ -19,9 +19,6 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
-  ApiNotFoundResponse,
-  ApiBadRequestResponse,
-  ApiConflictResponse,
 } from '@nestjs/swagger';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { SponsorInvitationsService } from './sponsor-invitations.service';
@@ -46,12 +43,12 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 @ApiTags('Invitaciones de Eventos')
 @Controller('events/:eventId/invitations')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
 @ApiBearerAuth('JWT-auth')
 export class EventInvitationsController {
   constructor(private readonly invitationsService: SponsorInvitationsService) {}
 
   @Get()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Listar todas las invitaciones del evento',
     description:
@@ -71,14 +68,14 @@ export class EventInvitationsController {
     @Query() filters: ListInvitationsQueryDto,
     @CurrentUser() currentUser: CurrentUserData,
   ) {
-    const userCompanyId = currentUser.roles.includes('company_admin')
-      ? currentUser.companyId
+    const userCompanyIds = currentUser.roles.includes('company_admin')
+      ? currentUser.companyIds
       : undefined;
 
     return await this.invitationsService.getAllInvitationsForEvent(
       eventId,
       filters,
-      userCompanyId,
+      userCompanyIds,
     );
   }
 }
@@ -111,9 +108,6 @@ export class SponsorInvitationsController {
   @ApiCreatedResponse({
     type: SponsorInvitationDto,
     description: 'Invitación creada exitosamente',
-  })
-  @ApiBadRequestResponse({
-    description: 'No hay cuota disponible o parámetros inválidos',
   })
   async createInvitation(
     @Param('sponsorId', ParseObjectIdPipe) sponsorId: string,
@@ -160,7 +154,6 @@ export class SponsorInvitationsController {
   }
 
   @Get()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Listar invitaciones',
     description: 'Obtiene todas las invitaciones de un patrocinador.',
@@ -188,7 +181,6 @@ export class SponsorInvitationsController {
   }
 
   @Get(':invitationId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
     summary: 'Ver detalles de invitación',
     description:
@@ -213,7 +205,6 @@ export class SponsorInvitationsController {
     type: SponsorInvitationDto,
     description: 'Detalles de la invitación obtenidos exitosamente',
   })
-  @ApiNotFoundResponse({ description: 'Invitación no encontrada' })
   async getInvitationDetails(
     @Param('invitationId', ParseObjectIdPipe) invitationId: string,
   ) {
@@ -221,7 +212,6 @@ export class SponsorInvitationsController {
   }
 
   @Patch(':invitationId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Actualizar invitación',
     description:
@@ -246,9 +236,6 @@ export class SponsorInvitationsController {
     type: SponsorInvitationDto,
     description: 'Invitación actualizada exitosamente',
   })
-  @ApiBadRequestResponse({
-    description: 'No se puede reducir maxUses por debajo de usos actuales',
-  })
   async updateInvitation(
     @Param('invitationId', ParseObjectIdPipe) invitationId: string,
     @Body() updateDto: UpdateSponsorInvitationDto,
@@ -260,7 +247,6 @@ export class SponsorInvitationsController {
   }
 
   @Delete(':invitationId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Desactivar invitación',
@@ -312,7 +298,6 @@ export class PublicInvitationsController {
   @ApiOkResponse({
     description: 'Información de validación de la invitación',
   })
-  @ApiNotFoundResponse({ description: 'Código de invitación no válido' })
   async validateInvitation(@Param('code') code: string) {
     return await this.invitationsService.validateInvitationByCode(code);
   }

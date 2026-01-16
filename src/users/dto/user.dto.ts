@@ -34,44 +34,6 @@ class ShortCompanyDto {
   contactPhone?: string;
 }
 
-export class ShortPersonDto {
-  @ApiProperty({
-    description: 'ID único de la persona',
-    example: '64f14b1a2c4e5a1234567890',
-  })
-  @Expose()
-  @Transform(({ obj }) => obj._id?.toString())
-  id: string;
-
-  @ApiProperty({
-    description: 'Nombre de la persona',
-    example: 'Juan',
-  })
-  @Expose()
-  firstName: string;
-
-  @ApiProperty({
-    description: 'Apellido de la persona',
-    example: 'Pérez',
-  })
-  @Expose()
-  lastName: string;
-
-  @ApiPropertyOptional({
-    description: 'Número de teléfono',
-    example: '+51987654321',
-  })
-  @Expose()
-  phone?: string;
-
-  @ApiPropertyOptional({
-    description: 'Nombre completo de la persona (campo virtual)',
-    example: 'Juan Pérez',
-  })
-  @Expose()
-  fullName?: string;
-}
-
 export class UserDto {
   @ApiProperty({
     description: 'ID único del usuario',
@@ -89,6 +51,41 @@ export class UserDto {
   email: string;
 
   @ApiProperty({
+    description: 'Nombre del usuario',
+    example: 'Juan',
+  })
+  @Expose()
+  firstName: string;
+
+  @ApiProperty({
+    description: 'Apellido del usuario',
+    example: 'Pérez',
+  })
+  @Expose()
+  lastName: string;
+
+  @ApiPropertyOptional({
+    description: 'Número de teléfono',
+    example: '+51987654321',
+  })
+  @Expose()
+  phone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Fecha de nacimiento en formato ISO 8601',
+    example: '1990-05-12T00:00:00.000Z',
+  })
+  @Expose()
+  dateOfBirth?: Date;
+
+  @ApiPropertyOptional({
+    description: 'URL del avatar/foto del usuario',
+    example: 'https://cdn.ejemplo.com/upload/users/123456-uuid-photo.jpg',
+  })
+  @Expose()
+  avatar?: string;
+
+  @ApiProperty({
     description: 'Rol del usuario dentro de la plataforma',
     enum: UserRole,
     isArray: true,
@@ -98,12 +95,12 @@ export class UserDto {
   roles: UserRole[];
 
   @ApiPropertyOptional({
-    description: 'Empresa asociada al usuario',
-    example: ShortCompanyDto,
+    description: 'Empresas asociadas al usuario',
+    type: [ShortCompanyDto],
   })
-  @Type(() => ShortCompanyDto)
   @Expose()
-  company?: ShortCompanyDto;
+  @Type(() => ShortCompanyDto)
+  companies?: ShortCompanyDto[];
 
   @ApiProperty({
     description: 'Indica si el correo electrónico fue verificado',
@@ -147,12 +144,4 @@ export class UserDto {
   })
   @Expose()
   deletedAt?: Date;
-
-  @ApiPropertyOptional({
-    description: 'Persona asociada al usuario',
-    type: () => ShortPersonDto,
-  })
-  @Expose()
-  @Type(() => ShortPersonDto)
-  person?: ShortPersonDto;
 }

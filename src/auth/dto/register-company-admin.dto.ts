@@ -4,9 +4,9 @@ import { RegisterDto } from './register.dto';
 
 export class RegisterCompanyAdminDto extends RegisterDto {
   @ApiProperty({
-    description: 'Company ID that the admin will manage',
-    example: '60d5ecb74f4b2c001f5e4e6a',
+    description: 'Company IDs that the admin will manage',
+    example: ['60d5ecb74f4b2c001f5e4e6a'],
   })
-  @IsMongoId()
-  companyId: string;
+  @IsMongoId({ each: true })
+  companyIds: string[];
 }

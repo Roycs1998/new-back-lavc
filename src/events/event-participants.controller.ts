@@ -7,8 +7,6 @@ import {
   Param,
   Query,
   UseGuards,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,9 +15,6 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
-  ApiNotFoundResponse,
-  ApiBadRequestResponse,
-  ApiConflictResponse,
 } from '@nestjs/swagger';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
 import { EventParticipantsService } from './event-participants.service';
@@ -39,14 +34,14 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 @ApiTags('Participantes de Eventos')
 @Controller('events/:eventId/participants')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
 @ApiBearerAuth('JWT-auth')
 export class EventParticipantsController {
   constructor(
     private readonly eventParticipantsService: EventParticipantsService,
-  ) { }
+  ) {}
 
   @Post()
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
     summary: 'Registrar participante en un evento',
     description:
@@ -61,16 +56,10 @@ export class EventParticipantsController {
     type: EventParticipantDto,
     description: 'Participante registrado exitosamente',
   })
-  @ApiConflictResponse({
-    description: 'El usuario ya está registrado en este evento',
-  })
-  @ApiBadRequestResponse({
-    description: 'No hay cuota disponible para este tipo de participante',
-  })
   async registerParticipant(
     @Param('eventId', ParseObjectIdPipe) eventId: string,
     @Body() registerDto: RegisterParticipantDto,
-  ) {
+  ): Promise<EventParticipantDto> {
     return await this.eventParticipantsService.registerParticipant(
       eventId,
       registerDto,
@@ -97,7 +86,7 @@ export class EventParticipantsController {
     @Param('eventId', ParseObjectIdPipe) eventId: string,
     @Query() query: ListParticipantsQueryDto,
     @CurrentUser() currentUser: CurrentUserData,
-  ) {
+  ): Promise<PaginatedParticipantsDto> {
     return await this.eventParticipantsService.getParticipantsByEvent(
       eventId,
       query,
@@ -106,7 +95,6 @@ export class EventParticipantsController {
   }
 
   @Get('me')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Obtener mi participación en el evento',
     description: 'Obtiene la información de participación del usuario actual.',
@@ -120,9 +108,6 @@ export class EventParticipantsController {
     type: EventParticipantDto,
     description: 'Participación del usuario obtenida exitosamente',
   })
-  @ApiNotFoundResponse({
-    description: 'El usuario no está registrado en este evento',
-  })
   async getMyParticipation(
     @Param('eventId', ParseObjectIdPipe) eventId: string,
     @CurrentUser() currentUser: CurrentUserData,
@@ -134,7 +119,6 @@ export class EventParticipantsController {
   }
 
   @Get('staff')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
     summary: 'Listar staff del evento',
     description:
@@ -154,7 +138,6 @@ export class EventParticipantsController {
   }
 
   @Post('operational-staff')
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({
     summary: 'Asignar staff operativo a un evento (solo PLATFORM_ADMIN)',
     description:
@@ -164,12 +147,6 @@ export class EventParticipantsController {
     description: 'Staff operativo asignado correctamente',
     type: EventParticipantDto,
   })
-  @ApiBadRequestResponse({
-    description: 'Usuario ya está asignado como staff operativo',
-  })
-  @ApiNotFoundResponse({
-    description: 'Usuario o evento no encontrado',
-  })
   async assignOperationalStaff(
     @Param('eventId', ParseObjectIdPipe) eventId: string,
     @Body() dto: AssignOperationalStaffDto,
@@ -178,7 +155,6 @@ export class EventParticipantsController {
   }
 
   @Get('operational-staff')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
     summary: 'Listar staff operativo del evento',
     description:
@@ -195,8 +171,6 @@ export class EventParticipantsController {
   }
 
   @Delete('operational-staff/:participantId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({
     summary: 'Remover staff operativo (solo PLATFORM_ADMIN)',
     description: 'Desactiva la asignación de staff operativo de un usuario.',
@@ -206,7 +180,6 @@ export class EventParticipantsController {
     description: 'ID del participante (EventParticipant)',
   })
   @ApiOkResponse({ description: 'Staff operativo removido correctamente' })
-  @ApiNotFoundResponse({ description: 'Participante no encontrado' })
   async removeOperationalStaff(
     @Param('eventId', ParseObjectIdPipe) eventId: string,
     @Param('participantId', ParseObjectIdPipe) participantId: string,
@@ -218,8 +191,6 @@ export class EventParticipantsController {
   }
 
   @Delete(':participantId')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancelar participación',
     description:
@@ -239,10 +210,6 @@ export class EventParticipantsController {
     type: EventParticipantDto,
     description: 'Participación cancelada exitosamente',
   })
-  @ApiNotFoundResponse({ description: 'Participante no encontrado' })
-  @ApiBadRequestResponse({
-    description: 'La participación ya está cancelada',
-  })
   async cancelParticipation(
     @Param('participantId', ParseObjectIdPipe) participantId: string,
     @CurrentUser() currentUser: CurrentUserData,
@@ -254,12 +221,6 @@ export class EventParticipantsController {
   }
 
   @Get('staff-access/check')
-  @Roles(
-    UserRole.PLATFORM_ADMIN,
-    UserRole.COMPANY_ADMIN,
-    UserRole.USER,
-    UserRole.EVENT_STAFF,
-  )
   @ApiOperation({
     summary: 'Verificar acceso al panel de staff',
     description:
@@ -291,7 +252,6 @@ export class EventParticipantsController {
   }
 
   @Post('sync-speakers')
-  @Roles(UserRole.PLATFORM_ADMIN, UserRole.COMPANY_ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'Sincronizar speakers del evento con participantes',
     description:
@@ -314,9 +274,6 @@ export class EventParticipantsController {
         syncedCount: { type: 'number', example: 3 },
       },
     },
-  })
-  @ApiBadRequestResponse({
-    description: 'Datos inválidos',
   })
   async syncSpeakers(
     @Param('eventId', ParseObjectIdPipe) eventId: string,

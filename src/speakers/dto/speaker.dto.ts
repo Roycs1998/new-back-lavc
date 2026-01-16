@@ -1,56 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Exclude, Expose, Type } from 'class-transformer';
+import { Exclude, Expose, Transform, Type } from 'class-transformer';
 import { Currency } from 'src/common/enums/currency.enum';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 import { UploadSource } from '../entities/speaker.entity';
 
-class ShortCompanyDto {
+class ShortUserDto {
   @ApiProperty({
-    description: 'ID único de la empresa',
-    example: '64f14b1a2c4e5a1234567891',
-  })
-  @Expose()
-  id: string;
-
-  @ApiProperty({
-    description: 'Nombre de la empresa',
-    example: 'Acme Corp',
-  })
-  @Expose()
-  name: string;
-
-  @ApiPropertyOptional({
-    description: 'Correo de contacto de la empresa',
-    example: 'contact@acme.com',
-  })
-  @Expose()
-  contactEmail?: string;
-
-  @ApiPropertyOptional({
-    description: 'Teléfono de contacto de la empresa',
-    example: '+51999999999',
-  })
-  @Expose()
-  contactPhone?: string;
-}
-
-class ShortPersonDto {
-  @ApiProperty({
-    description: 'ID único de la persona',
+    description: 'ID único del usuario',
     example: '64f14b1a2c4e5a1234567890',
   })
   @Expose()
   id: string;
 
   @ApiProperty({
-    description: 'Nombre de la persona',
+    description: 'Nombre del usuario',
     example: 'Juan',
   })
   @Expose()
   firstName: string;
 
   @ApiProperty({
-    description: 'Apellido de la persona',
+    description: 'Apellido del usuario',
     example: 'Pérez',
   })
   @Expose()
@@ -64,21 +34,22 @@ class ShortPersonDto {
   phone?: string;
 
   @ApiPropertyOptional({
-    description: 'Nombre completo de la persona (campo virtual)',
+    description: 'Nombre completo del usuario (campo virtual)',
     example: 'Juan Pérez',
   })
   @Expose()
+  @Transform(({ obj }) => `${obj.firstName} ${obj.lastName}`.trim())
   fullName?: string;
 
   @ApiPropertyOptional({
-    description: 'Correo electrónico de la persona',
+    description: 'Correo electrónico del usuario',
     example: 'juan.perez@example.com',
   })
   @Expose()
   email?: string;
 
   @ApiPropertyOptional({
-    description: 'URL del avatar/foto de la persona',
+    description: 'URL del avatar/foto del usuario',
     example: 'https://cdn.ejemplo.com/upload/speakers/123456-uuid-photo.jpg',
   })
   @Expose()
@@ -120,20 +91,12 @@ export class SpeakerDto {
   id: string;
 
   @ApiPropertyOptional({
-    description: 'Persona asociada al usuario',
-    type: () => ShortPersonDto,
+    description: 'Usuario asociado al orador',
+    type: () => ShortUserDto,
   })
   @Expose()
-  @Type(() => ShortPersonDto)
-  person: ShortPersonDto;
-
-  @ApiPropertyOptional({
-    description: 'Empresa asociada al usuario',
-    example: ShortCompanyDto,
-  })
-  @Type(() => ShortCompanyDto)
-  @Expose()
-  company?: ShortCompanyDto;
+  @Type(() => ShortUserDto)
+  user: ShortUserDto;
 
   @ApiProperty({ example: 'Gastroenterología' })
   @Expose()

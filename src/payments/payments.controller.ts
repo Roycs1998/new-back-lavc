@@ -32,7 +32,7 @@ import { RefundReason } from '../common/enums/refund-reason.enum';
 @Controller('payments')
 @ApiBearerAuth('JWT-auth')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) { }
+  constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('process')
   @HttpCode(HttpStatus.OK)

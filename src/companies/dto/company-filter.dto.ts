@@ -17,6 +17,11 @@ export class CompanyFilterDto extends BaseFilterDto {
   @IsString()
   country?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by country code' })
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
   @ApiPropertyOptional({ description: 'Filter by city' })
   @IsOptional()
   @IsString()

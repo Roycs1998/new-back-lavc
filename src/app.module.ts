@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
-import { PersonsModule } from './persons/persons.module';
 import { CompaniesModule } from './companies/companies.module';
 import { UsersModule } from './users/users.module';
 
@@ -18,10 +17,13 @@ import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { QRModule } from './qr/qr.module';
-import { AnalyticsModule } from './analytics/analytics.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { EmailModule } from './email/email.module';
 import { StorageModule } from './storage/storage.module';
+import { EventDocumentsModule } from './event-documents/event-documents.module';
+import { EventCertificatesModule } from './event-certificates/event-certificates.module';
+import { EventSponsorsModule } from './event-sponsors/event-sponsors.module';
+import { EventTicketTypesModule } from './event-ticket-types/event-ticket-types.module';
 
 @Module({
   imports: [
@@ -44,7 +46,6 @@ import { StorageModule } from './storage/storage.module';
       }),
       inject: [ConfigService],
     }),
-    PersonsModule,
     CompaniesModule,
     UsersModule,
     AuthModule,
@@ -54,10 +55,13 @@ import { StorageModule } from './storage/storage.module';
     PaymentsModule,
     TicketsModule,
     QRModule,
-    AnalyticsModule,
     PaymentMethodsModule,
     EmailModule,
     StorageModule,
+    EventDocumentsModule,
+    EventCertificatesModule,
+    EventSponsorsModule,
+    EventTicketTypesModule,
   ],
   controllers: [],
   providers: [],

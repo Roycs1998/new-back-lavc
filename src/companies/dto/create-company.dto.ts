@@ -9,7 +9,7 @@ import {
   Max,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CompanyType } from 'src/common/enums/company-type.enum';
 
@@ -20,6 +20,7 @@ class AddressDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   street?: string;
 
   @ApiProperty({
@@ -27,6 +28,7 @@ class AddressDto {
     example: 'Lima',
   })
   @IsString()
+  @Transform(({ value }) => value?.trim())
   city!: string;
 
   @ApiPropertyOptional({
@@ -35,6 +37,7 @@ class AddressDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   state?: string;
 
   @ApiProperty({
@@ -42,6 +45,7 @@ class AddressDto {
     example: 'Perú',
   })
   @IsString()
+  @Transform(({ value }) => value?.trim())
   country!: string;
 
   @ApiPropertyOptional({
@@ -50,7 +54,16 @@ class AddressDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   zipCode?: string;
+
+  @ApiProperty({
+    description: 'Código de país',
+    example: 'PE',
+  })
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  countryCode!: string;
 }
 
 class CompanySettingsDto {
@@ -88,6 +101,7 @@ export class CreateCompanyDto {
     example: 'Acme Events S.A.C.',
   })
   @IsString()
+  @Transform(({ value }) => value?.trim())
   name!: string;
 
   @ApiPropertyOptional({
@@ -96,6 +110,7 @@ export class CreateCompanyDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   description?: string;
 
   @ApiPropertyOptional({
@@ -104,6 +119,7 @@ export class CreateCompanyDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   logo?: string;
 
   @ApiPropertyOptional({
@@ -112,6 +128,7 @@ export class CreateCompanyDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   website?: string;
 
   @ApiProperty({
@@ -119,6 +136,8 @@ export class CreateCompanyDto {
     example: 'contacto@acme-events.com',
   })
   @IsOptional()
+  @IsEmail()
+  @Transform(({ value }) => value?.trim().toLowerCase())
   contactEmail?: string;
 
   @ApiPropertyOptional({
@@ -127,6 +146,7 @@ export class CreateCompanyDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => value?.trim())
   contactPhone?: string;
 
   @ApiPropertyOptional({

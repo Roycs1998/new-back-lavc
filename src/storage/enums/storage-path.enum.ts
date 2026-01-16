@@ -5,5 +5,7 @@ export enum StoragePath {
   COMPANIES = 'companies',
   TICKETS = 'tickets',
   PROFILES = 'profiles',
+  DOCUMENTS = 'documents',
+  CERTIFICATES = 'certificates',
   TEMP = 'temp',
 }

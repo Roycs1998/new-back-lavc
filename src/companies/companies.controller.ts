@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
@@ -122,6 +123,19 @@ export class CompaniesController {
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() currentUser: CurrentUserData,
   ): Promise<void> {
+    if (!currentUser) {
+      throw new ForbiddenException('Usuario no autenticado');
+    }
+
+    if (
+      currentUser.roles.includes(UserRole.COMPANY_ADMIN) &&
+      (!currentUser.companyIds || !currentUser.companyIds.includes(id))
+    ) {
+      throw new ForbiddenException(
+        'Solo puedes eliminar la empresa asociada a tu cuenta',
+      );
+    }
+
     await this.companiesService.softDelete(id, currentUser?.id);
   }
 

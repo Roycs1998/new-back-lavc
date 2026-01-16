@@ -59,7 +59,9 @@ export class CulqiProvider implements PaymentProvider {
         },
       };
 
-      this.logger.log(`Processing Culqi payment for amount: ${amountInCents} ${currency}`);
+      this.logger.log(
+        `Processing Culqi payment for amount: ${amountInCents} ${currency}`,
+      );
       this.logger.log(`Using ${config?.secretKey ? 'DB' : 'ENV'} credentials`);
 
       // ⭐ CORE LOGIC: Call Culqi API (mantiene la comunicación exacta)
@@ -95,16 +97,18 @@ export class CulqiProvider implements PaymentProvider {
             outcome: charge.outcome,
             card: charge.source
               ? {
-                last4: charge.source.card_number?.slice(-4),
-                brand: charge.source.card_brand,
-                type: charge.source.card_type,
-              }
+                  last4: charge.source.card_number?.slice(-4),
+                  brand: charge.source.card_brand,
+                  type: charge.source.card_type,
+                }
               : null,
           },
         };
       } else {
         // ⭐ VALIDACIÓN ADICIONAL: Pago no fue aprobado por Culqi
-        this.logger.warn(`Payment not approved. Outcome code: ${charge.outcome?.code}`);
+        this.logger.warn(
+          `Payment not approved. Outcome code: ${charge.outcome?.code}`,
+        );
 
         return {
           success: false,

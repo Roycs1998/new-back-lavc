@@ -53,11 +53,8 @@ AudienceSizeSchema.pre('validate', function (next) {
   timestamps: true,
 })
 export class Speaker {
-  @Prop({ type: Types.ObjectId, ref: 'Person', required: true })
-  personId: Types.ObjectId;
-
-  @Prop({ type: Types.ObjectId, ref: 'Company', required: true })
-  companyId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
 
   @Prop({ trim: true, required: false })
   specialty?: string;
@@ -146,22 +143,14 @@ export class Speaker {
 
 export const SpeakerSchema = SchemaFactory.createForClass(Speaker);
 
-SpeakerSchema.virtual('person', {
-  ref: 'Person',
-  localField: 'personId',
+SpeakerSchema.virtual('user', {
+  ref: 'User',
+  localField: 'userId',
   foreignField: '_id',
   justOne: true,
 });
 
-SpeakerSchema.virtual('company', {
-  ref: 'Company',
-  localField: 'companyId',
-  foreignField: '_id',
-  justOne: true,
-});
-
-SpeakerSchema.index({ personId: 1 });
-SpeakerSchema.index({ companyId: 1, entityStatus: 1 });
+SpeakerSchema.index({ userId: 1 });
 SpeakerSchema.index({ specialty: 1, entityStatus: 1 });
 SpeakerSchema.index({ uploadedVia: 1 });
 SpeakerSchema.index({ createdBy: 1 });

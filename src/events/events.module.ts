@@ -3,11 +3,10 @@ import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Event, EventSchema } from './entities/event.entity';
-import { TicketType, TicketTypeSchema } from './entities/ticket.entity';
 import {
-  EventSponsor,
-  EventSponsorSchema,
-} from './entities/event-sponsor.entity';
+  TicketType,
+  TicketTypeSchema,
+} from 'src/event-ticket-types/entities/ticket.entity';
 import {
   EventParticipant,
   EventParticipantSchema,
@@ -19,22 +18,17 @@ import {
 import { CompaniesModule } from 'src/companies/companies.module';
 import { SpeakersModule } from 'src/speakers/speakers.module';
 import { UsersModule } from 'src/users/users.module';
-import { PersonsModule } from 'src/persons/persons.module';
 import { TicketsModule } from 'src/tickets/tickets.module';
-import { EventSponsorsService } from './event-sponsors.service';
+import { EventSponsorsModule } from '../event-sponsors/event-sponsors.module';
 import { EventParticipantsService } from './event-participants.service';
 import { SponsorInvitationsService } from './sponsor-invitations.service';
-import {
-  EventSponsorsController,
-  CompanySponsorEventsController,
-} from './event-sponsors.controller';
 import { EventParticipantsController } from './event-participants.controller';
 import {
   EventInvitationsController,
   SponsorInvitationsController,
   PublicInvitationsController,
 } from './sponsor-invitations.controller';
-import { EventCleanupService } from './event-cleanup.service';
+import { EventTicketTypesModule } from 'src/event-ticket-types/event-ticket-types.module';
 import { OperationalStaffInvitationsController } from './operational-staff-invitations.controller';
 
 @Module({
@@ -42,20 +36,18 @@ import { OperationalStaffInvitationsController } from './operational-staff-invit
     MongooseModule.forFeature([
       { name: Event.name, schema: EventSchema },
       { name: TicketType.name, schema: TicketTypeSchema },
-      { name: EventSponsor.name, schema: EventSponsorSchema },
       { name: EventParticipant.name, schema: EventParticipantSchema },
       { name: SponsorInvitation.name, schema: SponsorInvitationSchema },
     ]),
     forwardRef(() => CompaniesModule),
     forwardRef(() => SpeakersModule),
     forwardRef(() => UsersModule),
-    forwardRef(() => PersonsModule),
     forwardRef(() => TicketsModule),
+    forwardRef(() => EventSponsorsModule),
+    EventTicketTypesModule,
   ],
   controllers: [
     EventsController,
-    EventSponsorsController,
-    CompanySponsorEventsController,
     EventParticipantsController,
     EventInvitationsController,
     SponsorInvitationsController,
@@ -64,14 +56,11 @@ import { OperationalStaffInvitationsController } from './operational-staff-invit
   ],
   providers: [
     EventsService,
-    EventSponsorsService,
     EventParticipantsService,
     SponsorInvitationsService,
-    EventCleanupService,
   ],
   exports: [
     EventsService,
-    EventSponsorsService,
     EventParticipantsService,
     SponsorInvitationsService,
     MongooseModule,

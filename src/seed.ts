@@ -14,7 +14,7 @@ async function bootstrap() {
     console.log('👤 Creando usuarios...');
 
     // 1. Platform Admin
-    const platformAdmin = await usersService.createUserWithPerson({
+    const platformAdmin = await usersService.create({
       firstName: 'Admin',
       lastName: 'Plataforma',
       email: 'admin@lavc.com',
@@ -26,7 +26,7 @@ async function bootstrap() {
     console.log('  ✅ Platform Admin creado:', platformAdmin.email);
 
     // 2. Company Admins
-    const companyAdmin1 = await usersService.createUserWithPerson({
+    const companyAdmin1 = await usersService.create({
       firstName: 'Carlos',
       lastName: 'Rodríguez',
       email: 'carlos@techcorp.com',
@@ -37,7 +37,7 @@ async function bootstrap() {
     });
     console.log('  ✅ Company Admin 1 creado:', companyAdmin1.email);
 
-    const companyAdmin2 = await usersService.createUserWithPerson({
+    const companyAdmin2 = await usersService.create({
       firstName: 'María',
       lastName: 'González',
       email: 'maria@innovatech.com',
@@ -65,7 +65,7 @@ async function bootstrap() {
     ];
 
     for (const userData of userNames) {
-      const user = await usersService.createUserWithPerson({
+      const user = await usersService.create({
         firstName: userData.firstName,
         lastName: userData.lastName,
         email: userData.email,

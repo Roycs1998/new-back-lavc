@@ -5,7 +5,7 @@ import { EventType } from '../../common/enums/event-type.enum';
 import { EventLocationType } from 'src/common/enums/event-location-type.enum';
 import { AgendaItemType } from 'src/common/enums/agenda-item-type.enum';
 
-export type EventDocument = Event & Document;
+export type EventDocument = Event & Document & { _id: Types.ObjectId };
 
 @Schema({ _id: false })
 class EventAddress {
@@ -20,6 +20,9 @@ class EventAddress {
 
   @Prop({ trim: true, required: true })
   country!: string;
+
+  @Prop({ trim: true, required: true })
+  countryCode?: string;
 
   @Prop({ trim: true })
   zipCode?: string;
@@ -227,13 +230,14 @@ export class Event {
   @Prop({ type: [Types.ObjectId], ref: 'PaymentMethod', default: [] })
   availablePaymentMethods: Types.ObjectId[];
 
-  // ⭐ Campos de Priorizaci\u00f3n
+  // Eliminar luego de la presentacion
   @Prop({ type: Number, default: 50, min: 1, max: 100 })
   displayPriority: number;
 
   @Prop({ type: Boolean, default: false })
   isFeatured: boolean;
 
+  // Eliminar luego de la presentacion
   @Prop({ type: Boolean, default: true })
   showOnHomepage: boolean;
 

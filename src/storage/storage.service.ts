@@ -245,4 +245,17 @@ export class StorageService {
       allowedMimeTypes: ['image/png', 'image/jpeg', 'image/svg+xml'],
     });
   }
+
+  async uploadCertificateTemplate(
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ) {
+    return this.uploadFile(buffer, originalName, mimeType, {
+      path: StoragePath.CERTIFICATES,
+      isPublic: false,
+      maxSize: 10 * 1024 * 1024, // 10MB
+      allowedMimeTypes: ['application/pdf'],
+    });
+  }
 }

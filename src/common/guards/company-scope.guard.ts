@@ -38,7 +38,7 @@ export class CompanyScopeGuard implements CanActivate {
       }
 
       const targetCompanyId = companyIdFromParams || companyIdFromBody;
-      if (user.companyId !== targetCompanyId) {
+      if (!user.companyIds || !user.companyIds.includes(targetCompanyId)) {
         throw new ForbiddenException(
           'Access denied. You can only access resources from your company.',
         );

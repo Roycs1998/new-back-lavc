@@ -1,8 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  forwardRef,
-  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -14,9 +12,7 @@ import { User, UserDocument } from './entities/user.entity';
 import { FilterQuery, Model, SortOrder, Types } from 'mongoose';
 import { UserRole } from 'src/common/enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
-import { PersonsService } from 'src/persons/persons.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
-import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { asDate } from 'src/utils/asDate';
 import { escapeRegex } from 'src/utils/escapeRegex';
@@ -24,25 +20,23 @@ import { sanitizeFlat } from 'src/utils/sanitizeFlat';
 import { UserDto } from './dto/user.dto';
 import { UserPaginatedDto } from './dto/user-pagination.dto';
 import { toDto } from 'src/utils/toDto';
-import { UpdatePersonDto } from 'src/persons/dto/update-person.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @Inject(forwardRef(() => PersonsService))
-    private personsService: PersonsService,
-  ) {}
+  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
   async create(dto: CreateUserDto): Promise<UserDto> {
-    if (dto.roles?.includes(UserRole.COMPANY_ADMIN) && !dto.companyId) {
+    if (
+      dto.roles?.includes(UserRole.COMPANY_ADMIN) &&
+      (!dto.companyIds || dto.companyIds.length === 0)
+    ) {
       throw new BadRequestException(
-        'Se requiere el ID de la empresa para el rol de administrador de la empresa.',
+        'Se requiere al menos una empresa para el rol de administrador de empresa.',
       );
     }
-    if (dto.roles?.includes(UserRole.USER) && dto.companyId) {
+    if (dto.roles?.includes(UserRole.USER) && dto.companyIds?.length) {
       throw new BadRequestException(
-        'El ID de la empresa solo debe proporcionarse para el rol de administrador de la empresa.',
+        'Las empresas solo deben proporcionarse para el rol de administrador de empresa.',
       );
     }
 
@@ -58,17 +52,23 @@ export class UsersService {
     const password = await bcrypt.hash(dto.password, 12);
 
     const created = await this.userModel.create({
-      ...dto,
       email,
       password,
-      personId: new Types.ObjectId(dto.personId),
-      companyId: dto.companyId ? new Types.ObjectId(dto.companyId) : undefined,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phone: dto.phone,
+      dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+      avatar: dto.avatar,
+      roles: dto.roles && dto.roles.length ? dto.roles : [UserRole.USER],
+      companyIds: dto.companyIds
+        ? dto.companyIds.map((id) => new Types.ObjectId(id))
+        : [],
       entityStatus: EntityStatus.ACTIVE,
     });
 
     const user = await this.userModel
       .findById(created._id)
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!user) {
@@ -76,35 +76,6 @@ export class UsersService {
     }
 
     return toDto(user, UserDto);
-  }
-
-  async createUserWithPerson(dto: CreateUserWithPersonDto): Promise<UserDto> {
-    const email = dto.email.trim().toLowerCase();
-
-    const existingUser = await this.userModel.findOne({
-      email,
-      entityStatus: { $ne: EntityStatus.DELETED },
-    });
-
-    if (existingUser)
-      throw new ConflictException('El email ya está registrado');
-
-    const person = await this.personsService.createForUser(dto);
-
-    const user = await this.create({
-      ...dto,
-      personId: person.id,
-    });
-
-    const populatedUser = await this.userModel
-      .findById(user.id)
-      .populate([{ path: 'person' }, { path: 'company' }])
-      .exec();
-
-    if (!populatedUser)
-      throw new NotFoundException(`Usuario con ID ${user.id} no encontrado`);
-
-    return toDto(populatedUser, UserDto);
   }
 
   async findAll(filterDto: UserFilterDto): Promise<UserPaginatedDto> {
@@ -132,7 +103,7 @@ export class UsersService {
     else filter.entityStatus = { $ne: EntityStatus.DELETED };
 
     if (role) filter.roles = { $in: [role] };
-    if (companyId) filter.companyId = new Types.ObjectId(companyId);
+    if (companyId) filter.companyIds = new Types.ObjectId(companyId);
     if (typeof emailVerified === 'boolean')
       filter.emailVerified = emailVerified;
 
@@ -149,13 +120,13 @@ export class UsersService {
           $or: [
             { email: { $regex: escapeRegex(search.trim()), $options: 'i' } },
             {
-              'person.firstName': {
+              firstName: {
                 $regex: escapeRegex(search.trim()),
                 $options: 'i',
               },
             },
             {
-              'person.lastName': {
+              lastName: {
                 $regex: escapeRegex(search.trim()),
                 $options: 'i',
               },
@@ -171,9 +142,9 @@ export class UsersService {
       'roles',
       'entityStatus',
       'lastLogin',
-      'person.firstName',
-      'person.lastName',
-      'company.name',
+      'firstName',
+      'lastName',
+      'companies.name',
     ] as const);
 
     const sortKey = SORT_WHITELIST.has(sort as any) ? sort : 'createdAt';
@@ -185,22 +156,12 @@ export class UsersService {
       { $match: filter },
       {
         $lookup: {
-          from: 'persons',
-          localField: 'personId',
-          foreignField: '_id',
-          as: 'person',
-        },
-      },
-      { $unwind: '$person' },
-      {
-        $lookup: {
           from: 'companies',
-          localField: 'companyId',
+          localField: 'companyIds',
           foreignField: '_id',
-          as: 'company',
+          as: 'companies',
         },
       },
-      { $addFields: { company: { $arrayElemAt: ['$company', 0] } } },
     ];
 
     if (searchMatch) pipeline.push({ $match: searchMatch });
@@ -233,7 +194,7 @@ export class UsersService {
 
     const user = await this.userModel
       .findOne(filter)
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!user)
@@ -243,14 +204,17 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserDocument> {
-    if (dto.roles?.includes(UserRole.COMPANY_ADMIN) && !dto.companyId) {
+    if (
+      dto.roles?.includes(UserRole.COMPANY_ADMIN) &&
+      (!dto.companyIds || dto.companyIds.length === 0)
+    ) {
       throw new BadRequestException(
-        'Se requiere el ID de la empresa para el rol de administrador de la empresa.',
+        'Se requiere al menos una empresa para el rol de administrador de empresa.',
       );
     }
-    if (dto.roles?.includes(UserRole.USER) && dto.companyId) {
+    if (dto.roles?.includes(UserRole.USER) && dto.companyIds?.length) {
       throw new BadRequestException(
-        'El ID de la empresa solo debe proporcionarse para el rol de administrador de la empresa.',
+        'Las empresas solo deben proporcionarse para el rol de administrador de empresa.',
       );
     }
 
@@ -272,24 +236,14 @@ export class UsersService {
     }
 
     const { firstName, lastName, phone, dateOfBirth, ...userFields } = dto;
-
-    if (existing.personId && (firstName || lastName || phone || dateOfBirth)) {
-      const personUpdate: UpdatePersonDto = {};
-      if (firstName !== undefined) personUpdate.firstName = firstName;
-      if (lastName !== undefined) personUpdate.lastName = lastName;
-      if (phone !== undefined) personUpdate.phone = phone;
-      if (dateOfBirth !== undefined) personUpdate.dateOfBirth = dateOfBirth;
-
-      await this.personsService.update(
-        existing.personId.toString(),
-        personUpdate,
-      );
-    }
-
     const $set = sanitizeFlat({
       ...userFields,
-      companyId: userFields.companyId
-        ? new Types.ObjectId(userFields.companyId)
+      firstName,
+      lastName,
+      phone,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      companyIds: userFields.companyIds
+        ? userFields.companyIds.map((id) => new Types.ObjectId(id))
         : undefined,
     });
 
@@ -299,7 +253,7 @@ export class UsersService {
         { $set, $currentDate: { updatedAt: true } },
         { new: true, runValidators: true, context: 'query' },
       )
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!updated) throw new NotFoundException('Usuario no encontrado');
@@ -319,7 +273,7 @@ export class UsersService {
         },
         { new: true },
       )
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -346,7 +300,7 @@ export class UsersService {
         },
         { new: true },
       )
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -376,7 +330,7 @@ export class UsersService {
         runValidators: true,
         context: 'query',
       })
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!doc) throw new NotFoundException('Usuario no encontrado');
@@ -397,7 +351,7 @@ export class UsersService {
 
     const user = await this.userModel
       .findOne(filter)
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
 
     if (!user) {
@@ -484,7 +438,7 @@ export class UsersService {
         entityStatus: { $ne: EntityStatus.DELETED },
       })
       .select('+password')
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate([{ path: 'companies' }])
       .exec();
   }
 

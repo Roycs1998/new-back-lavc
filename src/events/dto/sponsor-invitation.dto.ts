@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Expose, Type } from 'class-transformer';
+import { Expose, Type, Transform } from 'class-transformer';
 import { ParticipantType } from '../../common/enums/participant-type.enum';
 import { InvitationUsageType } from '../../common/enums/invitation-usage-type.enum';
 import { EventDto } from './event.dto';
@@ -53,7 +53,15 @@ class InvitationSponsorDto {
   company!: InvitationCompanyDto;
 }
 
-class InvitationPersonSimpleDto {
+class InvitationUserSimpleDto {
+  @ApiProperty({ example: '66c0da2b6a3aa6ed3c63e020' })
+  @Expose()
+  id!: string;
+
+  @ApiProperty({ example: 'user@example.com' })
+  @Expose()
+  email!: string;
+
   @ApiProperty({ example: 'John' })
   @Expose()
   firstName!: string;
@@ -64,26 +72,16 @@ class InvitationPersonSimpleDto {
 
   @ApiProperty({ example: 'John Doe' })
   @Expose()
+  @Transform(({ obj }) => {
+    const firstName = obj.firstName;
+    const lastName = obj.lastName;
+    return `${firstName ?? ''} ${lastName ?? ''}`.trim() || undefined;
+  })
   fullName!: string;
 
   @ApiPropertyOptional({ example: '+1234567890' })
   @Expose()
   phone?: string;
-}
-
-class InvitationUserSimpleDto {
-  @ApiProperty({ example: '66c0da2b6a3aa6ed3c63e020' })
-  @Expose()
-  id!: string;
-
-  @ApiProperty({ example: 'user@example.com' })
-  @Expose()
-  email!: string;
-
-  @ApiProperty({ type: InvitationPersonSimpleDto })
-  @Expose()
-  @Type(() => InvitationPersonSimpleDto)
-  person!: InvitationPersonSimpleDto;
 }
 
 class InvitationUseDto {

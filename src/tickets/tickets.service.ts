@@ -12,7 +12,7 @@ import { Ticket, TicketDocument } from './entities/ticket.entity';
 import {
   TicketType,
   TicketTypeDocument,
-} from '../events/entities/ticket.entity';
+} from '../event-ticket-types/entities/ticket.entity';
 import { UsersService } from '../users/users.service';
 import { ParticipantType } from '../common/enums/participant-type.enum';
 import { TicketLifecycleStatus } from '../common/enums/ticket-lifecycle-status.enum';
@@ -28,7 +28,7 @@ export class TicketsService {
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
     private qrService: QRService,
-  ) { }
+  ) {}
 
   async generateTicketsForOrder(orderId: string): Promise<Ticket[]> {
     // ✅ Fetch ORDER DOCUMENT directly from DB, NOT DTO
@@ -159,7 +159,7 @@ export class TicketsService {
     // Obtener información del usuario
     const user = await this.usersService.findOne(data.userId);
 
-    if (!user.person) {
+    if (!user.firstName || !user.lastName) {
       throw new BadRequestException('User does not have person information');
     }
 
@@ -190,12 +190,12 @@ export class TicketsService {
       sourceId: new Types.ObjectId(data.participantId),
       participantType: data.participantType,
       attendeeInfo: {
-        firstName: user.person.firstName,
-        lastName: user.person.lastName,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        phone: user.person.phone || '',
-        documentType: (user.person as any).documentType || 'DNI',
-        documentNumber: (user.person as any).documentNumber || '00000000',
+        phone: user.phone || '',
+        documentType: (user as any).documentType || 'DNI',
+        documentNumber: (user as any).documentNumber || '00000000',
       },
     });
 

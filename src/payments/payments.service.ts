@@ -70,7 +70,7 @@ export class PaymentsService {
     } = createPaymentDto;
 
     const order = await this.ordersService.findOne(orderId);
-    console.log("createPaymentDto", createPaymentDto);
+    console.log('createPaymentDto', createPaymentDto);
     if (order.status !== OrderStatus.PENDING_PAYMENT) {
       throw new BadRequestException('Order is not in a payable state');
     }
@@ -169,7 +169,11 @@ export class PaymentsService {
   async processInstantPayment(
     dto: any, // ProcessInstantPaymentDto
     userId: string,
-  ): Promise<{ order: any; orders?: any[]; transaction: PaymentTransactionDocument }> {
+  ): Promise<{
+    order: any;
+    orders?: any[];
+    transaction: PaymentTransactionDocument;
+  }> {
     const { customerInfo, billingInfo, paymentMethodId, paymentData } = dto;
 
     // 1. Generar transaction ID
@@ -211,10 +215,19 @@ export class PaymentsService {
         .exec();
 
       console.log('🔍 DEBUG - paymentMethodId:', paymentMethodId);
-      console.log('🔍 DEBUG - paymentMethodDoc encontrado:', !!paymentMethodDoc);
+      console.log(
+        '🔍 DEBUG - paymentMethodDoc encontrado:',
+        !!paymentMethodDoc,
+      );
       console.log('🔍 DEBUG - paymentMethodDoc.type:', paymentMethodDoc?.type);
-      console.log('🔍 DEBUG - paymentMethodDoc.culqiConfig:', paymentMethodDoc?.culqiConfig);
-      console.log('🔍 DEBUG - culqiConfig.secretKey existe?:', !!paymentMethodDoc?.culqiConfig?.secretKey);
+      console.log(
+        '🔍 DEBUG - paymentMethodDoc.culqiConfig:',
+        paymentMethodDoc?.culqiConfig,
+      );
+      console.log(
+        '🔍 DEBUG - culqiConfig.secretKey existe?:',
+        !!paymentMethodDoc?.culqiConfig?.secretKey,
+      );
 
       if (!paymentMethodDoc) {
         throw new NotFoundException(
@@ -278,7 +291,7 @@ export class PaymentsService {
       const primaryOrder = orderDtos[0];
 
       // 7. Actualizar transacción con todos los orderIds
-      transaction.orderIds = orderDtos.map(o => new Types.ObjectId(o.id)); // ✅ Todos los IDs
+      transaction.orderIds = orderDtos.map((o) => new Types.ObjectId(o.id)); // ✅ Todos los IDs
       transaction.status = PaymentStatus.COMPLETED;
       transaction.providerTransactionId = paymentResult.providerTransactionId;
       transaction.providerResponse = paymentResult.metadata;
@@ -381,9 +394,7 @@ export class PaymentsService {
             OrderStatus.REFUNDED,
           );
 
-          await this.ticketsService.cancelTicketsForOrder(
-            ordId.toString(),
-          );
+          await this.ticketsService.cancelTicketsForOrder(ordId.toString());
         }
 
         this.sendRefundNotificationEmail(transaction);
@@ -482,9 +493,7 @@ export class PaymentsService {
           OrderStatus.PAID,
         );
 
-        await this.ticketsService.generateTicketsForOrder(
-          ordId.toString(),
-        );
+        await this.ticketsService.generateTicketsForOrder(ordId.toString());
       }
     }
   }

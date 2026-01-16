@@ -1,9 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 
-export function toDto<TDoc, TDto>(
-  doc: TDoc,
-  dtoClass: new () => TDto,
-): TDto {
+export function toDto<TDoc, TDto>(doc: TDoc, dtoClass: new () => TDto): TDto {
   let plain = doc;
 
   if (doc && typeof (doc as any).toJSON === 'function') {

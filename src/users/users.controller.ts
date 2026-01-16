@@ -25,7 +25,6 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { ParseObjectIdPipe } from '@nestjs/mongoose';
-import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 
@@ -65,15 +64,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Registrar un usuario con sus datos personales' })
   @ApiResponse({
     status: 201,
-    description: 'Usuario y persona creados correctamente',
+    description: 'Usuario creado correctamente',
     type: UserDto,
   })
   @ApiResponse({
     status: 400,
     description: 'El correo ya existe o datos inválidos',
   })
-  registerUserWithPerson(@Body() dto: CreateUserWithPersonDto) {
-    return this.usersService.createUserWithPerson(dto);
+  register(@Body() dto: CreateUserDto) {
+    return this.usersService.create(dto);
   }
 
   @Get()
@@ -151,7 +150,6 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
   @Roles(UserRole.PLATFORM_ADMIN)
   @ApiOperation({ summary: 'Eliminar un usuario de manera lógica por ID' })
   @ApiResponse({ status: 204, description: 'Usuario eliminado correctamente' })

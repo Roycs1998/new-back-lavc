@@ -21,16 +21,18 @@ import { CreateBulkInvitationsDto } from './dto/create-bulk-invitations.dto';
 import { BulkInvitationsResponseDto } from './dto/bulk-invitations-response.dto';
 import { InvitationUsageType } from '../common/enums/invitation-usage-type.enum';
 import { ParticipantType } from '../common/enums/participant-type.enum';
-import { EventSponsorsService } from './event-sponsors.service';
+import { EventSponsorsService } from '../event-sponsors/event-sponsors.service';
 import { EventParticipantsService } from './event-participants.service';
 import { UsersService } from '../users/users.service';
-import { PersonsService } from '../persons/persons.service';
 import { toDto } from '../utils/toDto';
-import { TicketType, TicketTypeDocument } from './entities/ticket.entity';
+import {
+  TicketType,
+  TicketTypeDocument,
+} from '../event-ticket-types/entities/ticket.entity';
 import { UserRole } from '../common/enums/user-role.enum';
 import { TicketsService } from '../tickets/tickets.service';
 import { Event, EventDocument } from './entities/event.entity';
-import { EventSponsorDocument } from './entities/event-sponsor.entity';
+import { EventSponsorDocument } from '../event-sponsors/entities/event-sponsor.entity';
 
 @Injectable()
 export class SponsorInvitationsService {
@@ -46,8 +48,6 @@ export class SponsorInvitationsService {
     private eventParticipantsService: EventParticipantsService,
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
-    @Inject(forwardRef(() => PersonsService))
-    private personsService: PersonsService,
     @Inject(forwardRef(() => TicketsService))
     private ticketsService: TicketsService,
   ) {}
@@ -122,7 +122,7 @@ export class SponsorInvitationsService {
       }
 
       if (regex) {
-        const matched = freeTickets.find((t) => regex!.test(t.name));
+        const matched = freeTickets.find((t) => regex.test(t.name));
         if (matched) return (matched._id as Types.ObjectId).toString();
       }
 
@@ -320,7 +320,7 @@ export class SponsorInvitationsService {
       eventId: eventId,
       code,
       participantType: createDto.participantType,
-      ticketTypeId: new Types.ObjectId(ticketTypeId!),
+      ticketTypeId: new Types.ObjectId(ticketTypeId),
       usageType: InvitationUsageType.SINGLE,
       maxUses: null,
       currentUses: 0,
@@ -417,7 +417,7 @@ export class SponsorInvitationsService {
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
     },
-    userCompanyId?: string,
+    userCompanyIds?: string[],
   ): Promise<{
     data: SponsorInvitationDto[];
     meta: {
@@ -438,9 +438,9 @@ export class SponsorInvitationsService {
       eventId: new Types.ObjectId(eventId),
     };
 
-    if (userCompanyId) {
+    if (userCompanyIds && userCompanyIds.length > 0) {
       const companySponsors =
-        await this.eventSponsorsService.findByCompanyId(userCompanyId);
+        await this.eventSponsorsService.findByCompanyIds(userCompanyIds);
       const sponsorIds = companySponsors.map((s: any) => s._id);
 
       query.eventSponsorId = { $in: sponsorIds };
@@ -479,7 +479,7 @@ export class SponsorInvitationsService {
       })
       .populate({
         path: 'uses',
-        populate: { path: 'userId', populate: { path: 'person' } },
+        populate: { path: 'userId' },
       })
       .sort(sortObject)
       .skip(skip)
@@ -815,7 +815,7 @@ export class SponsorInvitationsService {
     }
 
     // Crear nuevo usuario
-    const newUser = await this.usersService.createUserWithPerson({
+    const newUser = await this.usersService.create({
       firstName: acceptDto.firstName!,
       lastName: acceptDto.lastName!,
       email: acceptDto.email!,
@@ -965,7 +965,7 @@ export class SponsorInvitationsService {
       user: {
         id: user.id,
         email: user.email,
-        fullName: user.person?.fullName ?? '',
+        fullName: `${user.firstName} ${user.lastName}`.trim(),
       },
       message: 'Usuario registrado en el evento exitosamente',
     };

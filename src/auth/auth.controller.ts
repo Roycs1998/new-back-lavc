@@ -2,8 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  HttpCode,
-  HttpStatus,
   Patch,
   Post,
   Query,
@@ -19,10 +17,6 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { UserRole } from 'src/common/enums/user-role.enum';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { RegisterCompanyAdminDto } from './dto/register-company-admin.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import type { CurrentUserData } from 'src/common/decorators/current-user.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -32,14 +26,14 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserDto } from 'src/users/dto/user.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
+import { RegisterWithCompanyDto } from './dto/register-with-company.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Inicio de sesión de usuario',
     description:
@@ -50,13 +44,11 @@ export class AuthController {
     description: 'Inicio de sesión exitoso',
     type: AuthResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(loginDto);
   }
 
   @Post('register')
-  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Registro de usuario',
     description:
@@ -67,38 +59,25 @@ export class AuthController {
     description: 'Usuario registrado exitosamente',
     type: AuthResponseDto,
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Error en la validación o en los datos enviados',
-  })
-  @ApiResponse({ status: 409, description: 'Correo ya registrado' })
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(registerDto);
   }
 
-  @Post('register-company-admin')
-  @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PLATFORM_ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @Post('register-with-company')
   @ApiOperation({
-    summary: 'Registro de administrador de empresa',
+    summary: 'Registro de usuario con empresa propia',
     description:
-      'Solo un administrador de plataforma puede registrar un nuevo administrador de empresa.',
+      'Registra un nuevo usuario junto con la creación de su propia empresa. El usuario queda autenticado automáticamente y recibe rol de COMPANY_ADMIN asociado a la empresa creada.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Administrador de empresa registrado correctamente',
+    description: 'Usuario y empresa registrados exitosamente',
     type: AuthResponseDto,
   })
-  @ApiResponse({
-    status: 403,
-    description: 'Acceso denegado - permisos insuficientes',
-  })
-  async registerCompanyAdmin(
-    @Body() registerCompanyAdminDto: RegisterCompanyAdminDto,
+  async registerWithCompany(
+    @Body() dto: RegisterWithCompanyDto,
   ): Promise<AuthResponseDto> {
-    return this.authService.registerCompanyAdmin(registerCompanyAdminDto);
+    return this.authService.registerWithCompany(dto);
   }
 
   @Get('profile')
@@ -114,7 +93,6 @@ export class AuthController {
     description: 'Perfil obtenido correctamente',
     type: UserDto,
   })
-  @ApiResponse({ status: 401, description: 'No autorizado' })
   async getProfile(@CurrentUser() user: CurrentUserData): Promise<UserDto> {
     return this.authService.getProfile(user.id);
   }
@@ -151,10 +129,6 @@ export class AuthController {
     description: 'Contraseña cambiada correctamente',
     type: MessageResponseDto,
   })
-  @ApiResponse({
-    status: 401,
-    description: 'La contraseña actual es incorrecta o usuario no autorizado',
-  })
   async changePassword(
     @CurrentUser() user: CurrentUserData,
     @Body() changePasswordDto: ChangePasswordDto,
@@ -163,7 +137,6 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Solicitud de restablecimiento de contraseña',
     description:
@@ -181,7 +154,6 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Restablecer contraseña',
     description:
@@ -191,10 +163,6 @@ export class AuthController {
     status: 200,
     description: 'Contraseña restablecida correctamente',
     type: MessageResponseDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Token inválido o expirado',
   })
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
@@ -213,7 +181,6 @@ export class AuthController {
     description: 'Correo verificado correctamente',
     type: MessageResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Token de verificación inválido' })
   async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
   }
@@ -221,7 +188,6 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cerrar sesión',
     description:

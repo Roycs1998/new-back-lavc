@@ -17,13 +17,12 @@ import {
   Model,
   ProjectionType,
   QueryOptions,
-  Types,
+  UpdateQuery,
 } from 'mongoose';
-import { PersonsService } from 'src/persons/persons.service';
-import { CompaniesService } from 'src/companies/companies.service';
+import { UsersService } from 'src/users/users.service';
 import { StorageService } from 'src/storage/storage.service';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
-import { CreateSpeakerWithPersonDto } from 'src/persons/dto/create-speaker-with-person.dto';
+import { CreateSpeakerWithUserDto } from './dto/create-speaker-with-user.dto';
 import { SpeakerFilterDto } from './dto/speaker-filter.dto';
 import { UpdateSpeakerDto } from './dto/update-speaker.dto';
 import { toObjectId } from 'src/utils/toObjectId';
@@ -32,15 +31,15 @@ import { SpeakerDto } from './dto/speaker.dto';
 import { SpeakerPaginatedDto } from './dto/speaker-pagination.dto';
 import { toDto } from 'src/utils/toDto';
 import { extractKeyFromUrl } from 'src/utils/extractKeyFromUrl';
+import { UpdateUserDto } from 'src/users/dto/update-user.dto';
+import { UserDocument } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class SpeakersService {
   constructor(
     @InjectModel(Speaker.name) private speakerModel: Model<SpeakerDocument>,
-    @Inject(forwardRef(() => PersonsService))
-    private personsService: PersonsService,
-    @Inject(forwardRef(() => CompaniesService))
-    private companiesService: CompaniesService,
+    @Inject(forwardRef(() => UsersService))
+    private usersService: UsersService,
     private storageService: StorageService,
   ) {}
 
@@ -49,35 +48,36 @@ export class SpeakersService {
   }
 
   async create(dto: CreateSpeakerDto, createdBy?: string): Promise<SpeakerDto> {
-    const company = await this.companiesService.findOne(dto.companyId);
-    if (company.entityStatus !== EntityStatus.ACTIVE)
-      throw new BadRequestException('La empresa no está activa.');
-
     const doc = await this.speakerModel.create({
       ...dto,
-      personId: toObjectId(dto.personId),
-      companyId: toObjectId(dto.companyId),
+      userId: toObjectId(dto.userId),
       entityStatus: EntityStatus.ACTIVE,
       createdBy: createdBy ? toObjectId(createdBy) : undefined,
     });
 
-    return toDto(doc, SpeakerDto);
+    const populated = await this.speakerModel
+      .findById(doc._id)
+      .populate('user')
+      .exec();
+
+    if (!populated) {
+      throw new NotFoundException(
+        'Orador no encontrado después de la creación',
+      );
+    }
+
+    return toDto(populated, SpeakerDto);
   }
 
-  async createSpeakerWithPerson(
-    dto: CreateSpeakerWithPersonDto,
+  async createSpeakerWithUser(
+    dto: CreateSpeakerWithUserDto,
     createdBy?: string,
   ): Promise<SpeakerDto> {
-    const company = await this.companiesService.findOne(dto.companyId);
-    if (company.entityStatus !== EntityStatus.ACTIVE)
-      throw new BadRequestException('La empresa no está activa.');
+    const user = await this.usersService.create(dto);
 
-    const person = await this.personsService.createForSpeaker(dto);
-
-    const speaker = await this.create(
+    return this.create(
       {
-        personId: person.id,
-        companyId: dto.companyId,
+        userId: user.id,
         specialty: dto.specialty,
         biography: dto.biography,
         yearsExperience: dto.yearsExperience,
@@ -93,18 +93,6 @@ export class SpeakersService {
       },
       createdBy,
     );
-
-    const populated = await this.speakerModel
-      .findById(speaker.id)
-      .populate([{ path: 'person' }, { path: 'company' }])
-      .exec();
-
-    if (!populated)
-      throw new NotFoundException(
-        'Orador no encontrado después de la creación',
-      );
-
-    return toDto(populated, SpeakerDto);
   }
 
   async findAll(filter: SpeakerFilterDto): Promise<SpeakerPaginatedDto> {
@@ -114,7 +102,6 @@ export class SpeakersService {
       sort = 'createdAt',
       order = 'desc',
       search,
-      companyId,
       specialty,
       languages,
       topics,
@@ -130,22 +117,23 @@ export class SpeakersService {
       includeDeleted,
     } = filter;
 
-    const q: FilterQuery<Speaker> = {};
+    const q: FilterQuery<SpeakerDocument> = {};
 
-    if (entityStatus) q.entityStatus = entityStatus;
-    else q.entityStatus = { $ne: EntityStatus.DELETED };
+    if (entityStatus) {
+      q.entityStatus = entityStatus;
+    } else {
+      q.entityStatus = { $ne: EntityStatus.DELETED };
+    }
 
     if (!includeDeleted) {
       q.$or = [{ deletedAt: { $exists: false } }, { deletedAt: null }];
     }
 
-    if (companyId) q.companyId = toObjectId(companyId);
-
-    if (search && search.trim()) {
+    if (search?.trim()) {
       q.$text = { $search: search.trim() };
     }
 
-    if (specialty && specialty.trim()) {
+    if (specialty?.trim()) {
       q.specialty = new RegExp(`^${this.escapeRegex(specialty.trim())}$`, 'i');
     }
 
@@ -185,18 +173,13 @@ export class SpeakersService {
     else if (sort === 'updatedAt') sortObj['updatedAt'] = dir;
     else sortObj['createdAt'] = dir;
 
-    const projection: ProjectionType<Speaker> = {};
+    const projection: ProjectionType<SpeakerDocument> = {};
 
     const mongoQuery = this.speakerModel
       .find(q, projection, {
         collation: { locale: 'es', strength: 2 },
       } as QueryOptions)
-      .populate({
-        path: 'person',
-      })
-      .populate({
-        path: 'company',
-      })
+      .populate('user')
       .sort(sortObj)
       .skip((page - 1) * limit)
       .limit(limit);
@@ -213,21 +196,21 @@ export class SpeakersService {
       data,
       totalItems,
       totalPages,
-      currentPage: page,
+      currentPage: safePage(page),
       hasNextPage: page < totalPages,
       hasPreviousPage: page > 1,
     };
   }
 
   async findOne(id: string, includeDeleted = false): Promise<SpeakerDto> {
-    const filter: any = { _id: id };
+    const filter: FilterQuery<SpeakerDocument> = { _id: toObjectId(id) };
     if (!includeDeleted) {
       filter.entityStatus = { $ne: EntityStatus.DELETED };
     }
 
     const speaker = await this.speakerModel
       .findOne(filter)
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate('user')
       .exec();
 
     if (!speaker) {
@@ -245,9 +228,8 @@ export class SpeakersService {
     try {
       const { firstName, lastName, email, phone, ...speakerDto } = dto;
 
-      const $set = sanitizeDefined({
+      const $set: UpdateQuery<SpeakerDocument> = sanitizeDefined({
         ...speakerDto,
-        companyId: dto.companyId ? toObjectId(dto.companyId) : undefined,
         updatedBy: updatedBy ? toObjectId(updatedBy) : undefined,
       });
 
@@ -257,39 +239,38 @@ export class SpeakersService {
           { $set, $currentDate: { updatedAt: true } },
           { new: true, runValidators: true, context: 'query' },
         )
-        .populate([{ path: 'person' }, { path: 'company' }])
+        .populate('user')
         .exec();
 
       if (!speakerFound)
         throw new NotFoundException(`No se encontró el orador con ID ${id}`);
 
-      const hasPersonPatch =
+      const hasUserPatch =
         firstName !== undefined ||
         lastName !== undefined ||
         email !== undefined ||
         phone !== undefined;
 
-      if (hasPersonPatch && speakerFound.personId) {
-        const personSet = sanitizeDefined({
+      if (hasUserPatch && speakerFound.userId) {
+        const userSet: UpdateUserDto = sanitizeDefined({
           firstName,
           lastName,
           email,
           phone,
-          updatedBy: updatedBy ? toObjectId(updatedBy) : undefined,
         });
 
-        await this.personsService.update(
-          speakerFound.personId.toString(),
-          personSet,
-        );
+        await this.usersService.update(speakerFound.userId.toString(), userSet);
       }
 
-      const updated = await this.speakerModel
-        .findById(id)
-        .populate([{ path: 'person' }, { path: 'company' }])
-        .exec();
+      if (hasUserPatch) {
+        const updated = await this.speakerModel
+          .findById(id)
+          .populate('user')
+          .exec();
+        return toDto(updated!, SpeakerDto);
+      }
 
-      return toDto(updated!, SpeakerDto);
+      return toDto(speakerFound, SpeakerDto);
     } catch (error) {
       throw error;
     }
@@ -300,17 +281,23 @@ export class SpeakersService {
     entityStatus: EntityStatus,
     changedBy?: string,
   ): Promise<SpeakerDto> {
-    const update: any = {
-      $set: { entityStatus },
-      $currentDate: { updatedAt: true },
+    const update: UpdateQuery<SpeakerDocument> = {
+      $set: {
+        entityStatus,
+        ...(changedBy && entityStatus === EntityStatus.DELETED
+          ? { deletedBy: toObjectId(changedBy) }
+          : {}),
+      },
+      $currentDate: {
+        updatedAt: true as const,
+        ...(entityStatus === EntityStatus.DELETED
+          ? { deletedAt: true as const }
+          : {}),
+      },
+      ...(entityStatus !== EntityStatus.DELETED
+        ? { $unset: { deletedAt: '', deletedBy: '' } }
+        : {}),
     };
-
-    if (entityStatus === EntityStatus.DELETED) {
-      update.$currentDate.deletedAt = true;
-      if (changedBy) update.$set.deletedBy = new Types.ObjectId(changedBy);
-    } else {
-      update.$unset = { deletedAt: '', deletedBy: '' };
-    }
 
     const doc = await this.speakerModel
       .findOneAndUpdate({ _id: id }, update, {
@@ -318,7 +305,7 @@ export class SpeakersService {
         runValidators: true,
         context: 'query',
       })
-      .populate([{ path: 'person' }, { path: 'company' }])
+      .populate('user')
       .exec();
 
     if (!doc)
@@ -338,19 +325,18 @@ export class SpeakersService {
   ): Promise<SpeakerDto> {
     const speakerDoc = await this.speakerModel
       .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
-      .populate('person')
+      .populate<{ user: UserDocument }>('user')
       .exec();
 
     if (!speakerDoc) {
       throw new NotFoundException(`No se encontró el orador con ID ${id}`);
     }
 
-    if (!speakerDoc.personId) {
-      throw new BadRequestException('El speaker no tiene una persona asociada');
+    if (!speakerDoc.userId) {
+      throw new BadRequestException('El speaker no tiene un usuario asociado');
     }
 
-    const speaker = toDto(speakerDoc, SpeakerDto);
-    const oldAvatarUrl = speaker.person.avatar;
+    const oldAvatarUrl = speakerDoc.user?.avatar;
 
     const fileInfo = await this.storageService.uploadSpeakerPhoto(
       buffer,
@@ -358,7 +344,7 @@ export class SpeakersService {
       mimeType,
     );
 
-    await this.personsService.update(speakerDoc.personId.toString(), {
+    await this.usersService.update(speakerDoc.userId.toString(), {
       avatar: fileInfo.publicUrl,
     });
 
@@ -379,19 +365,18 @@ export class SpeakersService {
   async deleteSpeakerPhoto(id: string): Promise<SpeakerDto> {
     const speakerDoc = await this.speakerModel
       .findOne({ _id: id, entityStatus: { $ne: EntityStatus.DELETED } })
-      .populate('person')
+      .populate<{ user: UserDocument }>('user')
       .exec();
 
     if (!speakerDoc) {
       throw new NotFoundException(`No se encontró el orador con ID ${id}`);
     }
 
-    if (!speakerDoc.personId) {
-      throw new BadRequestException('El speaker no tiene una persona asociada');
+    if (!speakerDoc.userId) {
+      throw new BadRequestException('El speaker no tiene un usuario asociado');
     }
 
-    const speaker = toDto(speakerDoc, SpeakerDto);
-    const avatarUrl = speaker.person?.avatar;
+    const avatarUrl = speakerDoc.user?.avatar;
 
     if (!avatarUrl) {
       throw new BadRequestException('El speaker no tiene una foto asignada');
@@ -406,10 +391,14 @@ export class SpeakersService {
       }
     }
 
-    await this.personsService.update(speakerDoc.personId.toString(), {
+    await this.usersService.update(speakerDoc.userId.toString(), {
       avatar: undefined,
     });
 
     return this.findOne(id);
   }
+}
+
+function safePage(page: number): number {
+  return Math.max(1, Number(page));
 }

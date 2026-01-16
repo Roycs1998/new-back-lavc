@@ -254,9 +254,125 @@ const deleteCompanyLogo = async (companyId: string) => {
 
 ---
 
-## 🎟️ 3. Creación Masiva de Invitaciones
+## 🏢 3. Registro de usuario con empresa propia
 
-### 3.1 Crear Múltiples Invitaciones (Bulk)
+### 3.1 Registro conjunto de usuario + empresa
+
+**Endpoint:** `POST /auth/register-with-company`
+
+**Autenticación:** Público
+
+**Descripción:**  
+Crea un usuario y, al mismo tiempo, crea una empresa asociada. El usuario obtiene automáticamente el rol `COMPANY_ADMIN` y queda autenticado al finalizar el proceso.
+
+#### Body (`RegisterWithCompanyDto`)
+
+```json
+{
+  "firstName": "Luis",
+  "lastName": "García",
+  "email": "luis@miempresa.com",
+  "password": "Password123!",
+  "phone": "+51987654321",
+  "dateOfBirth": "1990-01-15",
+  "company": {
+    "name": "Mi Empresa SAC",
+    "description": "Organizador de eventos corporativos",
+    "website": "https://miempresa.com",
+    "contactEmail": "contacto@miempresa.com",
+    "contactPhone": "+51911122334",
+    "address": {
+      "street": "Av. Siempre Viva 123",
+      "city": "Lima",
+      "state": "Lima",
+      "country": "Perú",
+      "zipCode": "15001"
+    },
+    "type": "event_organizer",
+    "commissionRate": 0.1
+  }
+}
+```
+
+> Importante: el email del usuario debe ser único en la plataforma.  
+> La empresa se crea en estado `ACTIVE` y queda asociada al usuario mediante `companyId`.
+
+#### Respuesta Exitosa (201 Created)
+
+Retorna un objeto `AuthResponseDto`:
+
+```json
+{
+  "user": {
+    "id": "64f1...",
+    "email": "luis@miempresa.com",
+    "roles": ["company_admin"],
+    "company": {
+      "id": "72ab...",
+      "name": "Mi Empresa SAC"
+    }
+  },
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": "3600s"
+}
+```
+
+#### Flujo recomendado (Frontend)
+
+1. Mostrar formulario combinado de datos personales + datos de empresa.
+2. Enviar el payload al endpoint `POST /auth/register-with-company`.
+3. Guardar el `access_token` en el storage del cliente.
+4. Redirigir al panel de administración de la empresa usando `user.company.id`.
+
+---
+
+## 🧹 4. Eliminación lógica de empresa propia
+
+### 4.1 Eliminar mi empresa (soft delete)
+
+**Endpoint:** `DELETE /companies/:id`
+
+**Autenticación:** Requerida (JWT)
+
+**Roles permitidos:** `PLATFORM_ADMIN`, `COMPANY_ADMIN`
+
+#### Regla de negocio
+
+- Un usuario con rol `COMPANY_ADMIN` **solo puede eliminar la empresa asociada a su cuenta** (`companyId`).
+- Un usuario con rol `PLATFORM_ADMIN` puede eliminar cualquier empresa.
+- La eliminación es **lógica**: se marca la empresa con `entityStatus = DELETED` y se registran `deletedAt` y `deletedBy`. Los datos permanecen en base de datos.
+
+#### Parámetros de URL
+
+- `id` (string, required): ID de la empresa a eliminar.
+
+#### Ejemplo de uso (Frontend) para company_admin
+
+```typescript
+const deleteMyCompany = async (companyId: string, token: string) => {
+  const response = await fetch(`/api/companies/${companyId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status !== 204) {
+    throw new Error('No se pudo eliminar la empresa');
+  }
+};
+```
+
+#### Resultado esperado
+
+- Respuesta `204 No Content` si la eliminación lógica fue exitosa.
+- Error `403 Forbidden` si un `COMPANY_ADMIN` intenta eliminar una empresa distinta a la asociada a su usuario.
+
+---
+
+## 🎟️ 5. Creación Masiva de Invitaciones
+
+### 5.1 Crear Múltiples Invitaciones (Bulk)
 
 **Endpoint:** `POST /events/:eventId/sponsors/:sponsorId/invitations/bulk`
 

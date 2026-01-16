@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from 'src/common/enums/currency.enum';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { UploadSource } from '../entities/speaker.entity';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
 
@@ -55,15 +55,12 @@ class AudienceSizeCreateDto {
 export class CreateSpeakerDto {
   @IsMongoId()
   @ApiProperty({ example: '66a9d8f7a2a0b7b3e1b0d111' })
-  personId: string;
-
-  @IsMongoId()
-  @ApiProperty({ example: '66a9d8f7a2a0b7b3e1b0d222' })
-  companyId: string;
+  userId: string;
 
   @IsOptional()
   @IsString()
   @ApiProperty({ example: 'Gastroenterología' })
+  @Transform(({ value }) => value?.trim())
   specialty?: string;
 
   @IsOptional()
@@ -71,6 +68,7 @@ export class CreateSpeakerDto {
   @ApiPropertyOptional({
     example: 'Especialista en hígado graso (NAFLD/NASH).',
   })
+  @Transform(({ value }) => value?.trim())
   biography?: string;
 
   @IsOptional()
@@ -130,6 +128,7 @@ export class CreateSpeakerDto {
   @IsOptional()
   @IsString()
   @ApiPropertyOptional({ example: 'Notas internas del speaker' })
+  @Transform(({ value }) => value?.trim())
   notes?: string;
 
   @IsOptional()

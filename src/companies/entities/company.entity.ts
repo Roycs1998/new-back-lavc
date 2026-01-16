@@ -12,6 +12,7 @@ export class Address {
   @Prop({ trim: true }) state?: string;
   @Prop({ trim: true }) country?: string;
   @Prop({ trim: true }) zipCode?: string;
+  @Prop({ trim: true }) countryCode?: string;
 }
 export const AddressSchema = SchemaFactory.createForClass(Address);
 
@@ -100,6 +101,12 @@ export class Company {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   deletedBy: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  updatedBy: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  createdBy: Types.ObjectId;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);

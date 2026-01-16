@@ -1,43 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Expose, Type } from 'class-transformer';
+import { Expose, Type, Transform } from 'class-transformer';
 import { ParticipantType } from '../../common/enums/participant-type.enum';
-
-class ShortPersonDto {
-  @ApiProperty({
-    description: 'ID único de la persona',
-    example: '64f14b1a2c4e5a1234567890',
-  })
-  @Expose()
-  id: string;
-
-  @ApiProperty({
-    description: 'Nombre de la persona',
-    example: 'Juan',
-  })
-  @Expose()
-  firstName: string;
-
-  @ApiProperty({
-    description: 'Apellido de la persona',
-    example: 'Pérez',
-  })
-  @Expose()
-  lastName: string;
-
-  @ApiPropertyOptional({
-    description: 'Número de teléfono',
-    example: '+51987654321',
-  })
-  @Expose()
-  phone?: string;
-
-  @ApiPropertyOptional({
-    description: 'Nombre completo de la persona (campo virtual)',
-    example: 'Juan Pérez',
-  })
-  @Expose()
-  fullName?: string;
-}
 
 class ShortUserDto {
   @ApiProperty({
@@ -55,12 +18,37 @@ class ShortUserDto {
   email!: string;
 
   @ApiProperty({
-    description: 'Información del usuario',
-    type: ShortPersonDto,
+    description: 'Nombre del usuario',
+    example: 'Juan',
   })
-  @Type(() => ShortPersonDto)
   @Expose()
-  person: ShortPersonDto;
+  firstName: string;
+
+  @ApiProperty({
+    description: 'Apellido del usuario',
+    example: 'Pérez',
+  })
+  @Expose()
+  lastName: string;
+
+  @ApiPropertyOptional({
+    description: 'Número de teléfono',
+    example: '+51987654321',
+  })
+  @Expose()
+  phone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Nombre completo del usuario (campo virtual)',
+    example: 'Juan Pérez',
+  })
+  @Expose()
+  @Transform(({ obj }) => {
+    const firstName = obj.firstName;
+    const lastName = obj.lastName;
+    return `${firstName ?? ''} ${lastName ?? ''}`.trim() || undefined;
+  })
+  fullName?: string;
 }
 
 class ShortCompanyDto {
@@ -182,12 +170,12 @@ class ShortSpeakerDto {
   yearsExperience?: number;
 
   @ApiPropertyOptional({
-    description: 'Información de la persona asociada al speaker',
-    type: ShortPersonDto,
+    description: 'Información del usuario asociado al speaker',
+    type: ShortUserDto,
   })
-  @Type(() => ShortPersonDto)
+  @Type(() => ShortUserDto)
   @Expose()
-  person?: ShortPersonDto;
+  user?: ShortUserDto;
 
   @ApiPropertyOptional({
     description: 'Empresa asociada al speaker',

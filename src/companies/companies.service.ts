@@ -4,17 +4,12 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-
 import { InjectModel } from '@nestjs/mongoose';
-
-import { Model, SortOrder, Types } from 'mongoose';
-
+import { FilterQuery, Model, SortOrder, Types, UpdateQuery } from 'mongoose';
 import { EntityStatus } from 'src/common/enums/entity-status.enum';
-
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyFilterDto } from './dto/company-filter.dto';
-
 import { Company, CompanyDocument } from './entities/company.entity';
 import { escapeRegex } from 'src/utils/escapeRegex';
 import { CompanyDto } from './dto/company.dto';
@@ -31,16 +26,12 @@ export class CompaniesService {
     private storageService: StorageService,
   ) {}
 
-  private normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
-  }
-
   private async ensureEmailIsAvailable(
     email: string,
     excludeId?: Types.ObjectId,
   ): Promise<void> {
-    const where: Record<string, any> = {
-      contactEmail: this.normalizeEmail(email),
+    const where: FilterQuery<CompanyDocument> = {
+      contactEmail: email.toLowerCase(),
       entityStatus: { $ne: EntityStatus.DELETED },
     };
     if (excludeId) where._id = { $ne: excludeId };
@@ -55,33 +46,22 @@ export class CompaniesService {
 
   async create(dto: CreateCompanyDto): Promise<CompanyDto> {
     try {
-      const contactEmail = this.normalizeEmail(dto.contactEmail ?? '');
-      const name = dto.name?.trim();
-
-      if (contactEmail) {
-        await this.ensureEmailIsAvailable(contactEmail);
+      if (dto.contactEmail) {
+        await this.ensureEmailIsAvailable(dto.contactEmail);
       }
 
       const payload = {
         ...dto,
-        name,
-        contactEmail,
         entityStatus: EntityStatus.ACTIVE,
       };
 
       const created = await this.companyModel.create(payload);
       return toDto(created, CompanyDto);
-    } catch (error: any) {
-      throw new InternalServerErrorException(
-        error?.message ?? 'No se pudo crear la empresa',
-      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'No se pudo crear la empresa';
+      throw new InternalServerErrorException(message);
     }
-  }
-
-  private isValidDate(input?: unknown): input is string {
-    if (typeof input !== 'string') return false;
-    const d = new Date(input);
-    return !Number.isNaN(d.getTime());
   }
 
   private iRegex(term: string) {
@@ -96,6 +76,7 @@ export class CompaniesService {
       order = 'desc',
       type,
       country,
+      countryCode,
       city,
       search,
       createdFrom,
@@ -103,7 +84,7 @@ export class CompaniesService {
       entityStatus,
     } = filter;
 
-    const q: Record<string, any> = {};
+    const q: FilterQuery<CompanyDocument> = {};
 
     if (entityStatus) {
       q.entityStatus = entityStatus;
@@ -113,10 +94,13 @@ export class CompaniesService {
 
     if (type) q.type = type;
 
-    if (country) q['address.country'] = this.iRegex(String(country));
-    if (city) q['address.city'] = this.iRegex(String(city));
+    if (countryCode) q['address.countryCode'] = countryCode;
 
-    if (typeof search === 'string' && search.trim()) {
+    if (country) q['address.country'] = this.iRegex(country);
+
+    if (city) q['address.city'] = this.iRegex(city);
+
+    if (search?.trim()) {
       const term = search.trim();
       const rx = this.iRegex(term);
       q.$or = [
@@ -130,11 +114,10 @@ export class CompaniesService {
       ];
     }
 
-    if (this.isValidDate(createdFrom) || this.isValidDate(createdTo)) {
+    if (createdFrom || createdTo) {
       q.createdAt = {};
-      if (this.isValidDate(createdFrom))
-        q.createdAt.$gte = new Date(createdFrom);
-      if (this.isValidDate(createdTo)) q.createdAt.$lte = new Date(createdTo);
+      if (createdFrom) q.createdAt.$gte = new Date(createdFrom);
+      if (createdTo) q.createdAt.$lte = new Date(createdTo);
     }
 
     const perPage = Math.min(100, Math.max(1, Number(limit)));
@@ -190,25 +173,14 @@ export class CompaniesService {
         throw new NotFoundException('Empresa no encontrada');
       }
 
-      const nextEmail = this.normalizeEmail(dto.contactEmail ?? '');
-
-      if (
-        nextEmail &&
-        nextEmail !== this.normalizeEmail(existing.contactEmail as any)
-      ) {
-        await this.ensureEmailIsAvailable(nextEmail, _id);
+      if (dto.contactEmail && dto.contactEmail !== existing.contactEmail) {
+        await this.ensureEmailIsAvailable(dto.contactEmail, _id);
       }
-
-      const $set: Record<string, any> = {
-        ...dto,
-        ...(dto.name ? { name: dto.name.trim() } : {}),
-        ...(dto.contactEmail ? { contactEmail: nextEmail } : {}),
-      };
 
       const updated = await this.companyModel
         .findOneAndUpdate(
           { _id, entityStatus: { $ne: EntityStatus.DELETED } },
-          { $set },
+          { $set: dto },
           { new: true, runValidators: true, context: 'query' },
         )
         .exec();
@@ -218,10 +190,12 @@ export class CompaniesService {
       }
 
       return toDto(updated, CompanyDto);
-    } catch (error: any) {
-      throw new InternalServerErrorException(
-        error?.message ?? 'No se pudo actualizar la empresa',
-      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo actualizar la empresa';
+      throw new InternalServerErrorException(message);
     }
   }
 
@@ -232,25 +206,29 @@ export class CompaniesService {
   ): Promise<CompanyDto> {
     const _id = toObjectId(id);
 
-    const match: Record<string, any> = { _id };
+    const match: FilterQuery<CompanyDocument> = { _id };
     if (status === EntityStatus.DELETED) {
       match.entityStatus = { $ne: EntityStatus.DELETED };
     }
 
-    const update: any = {
+    const update: UpdateQuery<CompanyDocument> = {
       $set: {
         entityStatus: status,
         ...(changedBy ? { updatedBy: toObjectId(changedBy) } : {}),
+        ...(status === EntityStatus.DELETED && changedBy
+          ? { deletedBy: toObjectId(changedBy) }
+          : {}),
       },
-      $currentDate: { updatedAt: true as const },
+      $currentDate: {
+        updatedAt: true as const,
+        ...(status === EntityStatus.DELETED
+          ? { deletedAt: true as const }
+          : {}),
+      },
+      ...(status !== EntityStatus.DELETED
+        ? { $unset: { deletedAt: '', deletedBy: '' } }
+        : {}),
     };
-
-    if (status === EntityStatus.DELETED) {
-      if (changedBy) update.$set.deletedBy = toObjectId(changedBy);
-      update.$currentDate.deletedAt = true as const; // registra fecha/hora de eliminación
-    } else {
-      update.$unset = { deletedAt: '', deletedBy: '' };
-    }
 
     const doc = await this.companyModel
       .findOneAndUpdate(match, update, {

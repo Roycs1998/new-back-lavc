@@ -49,6 +49,15 @@ export class EventAddressCreateDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(3)
+  @ApiPropertyOptional({
+    example: 'PE',
+    description: 'Código de país ISO 3166-1 alpha-2',
+  })
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(20)
   @ApiPropertyOptional({ example: '15001' })
   zipCode?: string;

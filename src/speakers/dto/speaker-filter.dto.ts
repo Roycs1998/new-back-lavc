@@ -16,11 +16,6 @@ import { UploadSource } from '../entities/speaker.entity';
 
 export class SpeakerFilterDto extends BaseFilterDto {
   @IsOptional()
-  @IsMongoId()
-  @ApiPropertyOptional()
-  companyId?: string;
-
-  @IsOptional()
   @IsString()
   @ApiPropertyOptional({
     description: 'Match exacto (case-insensitive)',

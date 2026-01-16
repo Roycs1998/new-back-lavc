@@ -29,9 +29,9 @@ class ShortCompanyDto {
   contactPhone?: string;
 }
 
-class ShortPersonDto {
+class ShortUserDto {
   @ApiProperty({
-    description: 'ID único de la persona',
+    description: 'ID único del usuario',
     example: '64f14b1a2c4e5a1234567890',
   })
   @Expose()
@@ -39,14 +39,14 @@ class ShortPersonDto {
   id: string;
 
   @ApiProperty({
-    description: 'Nombre de la persona',
+    description: 'Nombre del usuario',
     example: 'Juan',
   })
   @Expose()
   firstName: string;
 
   @ApiProperty({
-    description: 'Apellido de la persona',
+    description: 'Apellido del usuario',
     example: 'Pérez',
   })
   @Expose()
@@ -60,10 +60,11 @@ class ShortPersonDto {
   phone?: string;
 
   @ApiPropertyOptional({
-    description: 'Nombre completo de la persona (campo virtual)',
+    description: 'Nombre completo del usuario (campo virtual)',
     example: 'Juan Pérez',
   })
   @Expose()
+  @Transform(({ obj }) => `${obj.firstName} ${obj.lastName}`.trim())
   fullName?: string;
 }
 
@@ -73,13 +74,13 @@ class ShortSpeakerDto {
   id: string;
 
   @ApiPropertyOptional({
-    description: 'Persona asociada al orador',
-    type: () => ShortPersonDto,
+    description: 'Usuario asociado al orador',
+    type: () => ShortUserDto,
   })
   @Expose()
-  @Type(() => ShortPersonDto)
-  @Transform(({ obj }) => obj.personId)
-  person?: ShortPersonDto;
+  @Type(() => ShortUserDto)
+  @Transform(({ obj }) => obj.user)
+  user?: ShortUserDto;
 
   @ApiPropertyOptional({ example: 'Biografía del orador' })
   @Expose()

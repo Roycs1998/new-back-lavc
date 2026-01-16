@@ -15,13 +15,15 @@ import { UserRole } from 'src/common/enums/user-role.enum';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { CreateUserWithPersonDto } from 'src/persons/dto/create-user-with-person.dto';
+import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UserDto } from 'src/users/dto/user.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserDocument } from 'src/users/entities/user.entity';
 import { plainToInstance } from 'class-transformer';
+import { RegisterWithCompanyDto } from './dto/register-with-company.dto';
+import { CompaniesService } from 'src/companies/companies.service';
 
 @Injectable()
 export class AuthService {
@@ -29,6 +31,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private companiesService: CompaniesService,
   ) {}
 
   async validateUser(
@@ -71,7 +74,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       roles: user.roles,
-      companyId: user.companyId?.toString(),
+      companyIds: user.companyIds?.map((id) => id.toString()),
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -100,7 +103,7 @@ export class AuthService {
     }
 
     try {
-      const userWithPersonDto: CreateUserWithPersonDto = {
+      const createUserDto: CreateUserDto = {
         firstName,
         lastName,
         email,
@@ -110,8 +113,7 @@ export class AuthService {
         roles: [UserRole.USER],
       };
 
-      const user =
-        await this.usersService.createUserWithPerson(userWithPersonDto);
+      const user = await this.usersService.create(createUserDto);
 
       const verificationToken = this.generateVerificationToken();
       await this.usersService.update(user.id, {
@@ -124,8 +126,8 @@ export class AuthService {
     }
   }
 
-  async registerCompanyAdmin(
-    registerDto: RegisterDto & { companyId: string },
+  async registerWithCompany(
+    registerDto: RegisterWithCompanyDto,
   ): Promise<AuthResponseDto> {
     const {
       firstName,
@@ -134,7 +136,7 @@ export class AuthService {
       password,
       phone,
       dateOfBirth,
-      companyId,
+      company,
     } = registerDto;
 
     const existingUser = await this.usersService.findByEmail(email);
@@ -142,26 +144,33 @@ export class AuthService {
       throw new ConflictException('Correo electrónico ya registrado');
     }
 
-    const userWithPersonDto = {
-      firstName,
-      lastName,
-      email,
-      phone,
-      dateOfBirth,
-      password,
-      role: UserRole.COMPANY_ADMIN,
-      companyId,
-    };
+    try {
+      const createdCompany = await this.companiesService.create(company);
 
-    const user =
-      await this.usersService.createUserWithPerson(userWithPersonDto);
+      const createUserDto: CreateUserDto = {
+        firstName,
+        lastName,
+        email,
+        phone,
+        dateOfBirth,
+        password,
+        roles: [UserRole.COMPANY_ADMIN],
+        companyIds: [createdCompany.id],
+      };
 
-    const verificationToken = this.generateVerificationToken();
-    await this.usersService.update(user.id.toString(), {
-      emailVerificationToken: verificationToken,
-    });
+      const user = await this.usersService.create(createUserDto);
 
-    return this.login({ email, password });
+      const verificationToken = this.generateVerificationToken();
+      await this.usersService.update(user.id, {
+        emailVerificationToken: verificationToken,
+      });
+
+      return this.login({ email, password });
+    } catch (error: any) {
+      throw new BadRequestException(
+        error.message || 'El registro de usuario y empresa ha fallado.',
+      );
+    }
   }
 
   async changePassword(
@@ -272,7 +281,7 @@ export class AuthService {
       sub: user.id.toString(),
       email: user.email,
       roles: user.roles,
-      companyId: user.company?.id.toString(),
+      companyIds: user.companies?.map((c) => c.id),
     };
 
     const access_token = this.jwtService.sign(payload);

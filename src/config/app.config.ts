@@ -6,6 +6,7 @@ export default registerAs('app', () => ({
   apiPrefix: process.env.API_PREFIX || 'api/v1',
   culqiSecretKey: process.env.CULQI_SECRET_KEY || 'api/v1',
   qrSecret: process.env.QR_SECRET || 'default-secret-key',
+  webUrl: process.env.WEB_APP_URL || 'http://localhost:3000',
   swagger: {
     title: process.env.SWAGGER_TITLE || 'Event Platform API',
     description:
